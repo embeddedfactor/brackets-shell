@@ -95,8 +95,10 @@ void AppGetSettings(CefSettings& settings, CefRefPtr<ClientApp> app) {
   CefString(&settings.javascript_flags) =
       g_command_line->GetSwitchValue(cefclient::kJavascriptFlags);
     
-  // Enable dev tools
-  settings.remote_debugging_port = REMOTE_DEBUGGING_PORT;
+  // Specify a port to enable DevTools if one isn't already specified.
+  if (!g_command_line->HasSwitch("remote-debugging-port")) {
+      settings.remote_debugging_port = REMOTE_DEBUGGING_PORT;
+  }
   
   std::wstring versionStr = AppGetProductVersionString();
     
