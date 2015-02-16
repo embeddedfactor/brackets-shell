@@ -231,7 +231,9 @@ public:
   void QuittingApp(bool quitting) { m_quitting = quitting; }
   bool AppIsQuitting() { return m_quitting; }
   bool HasWindows() const { return !browser_window_map_.empty(); }
+#if defined(OS_LINUX)
   virtual void AfterClose() OVERRIDE;
+#endif
   
  protected:
   void SetLoading(bool isLoading);
