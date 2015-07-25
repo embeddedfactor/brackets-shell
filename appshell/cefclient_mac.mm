@@ -770,7 +770,8 @@ extern NSMutableArray* pendingOpenFiles;
     NSWindow* targetWindow = [clientApp findTargetWindow];
     if (targetWindow) {
       CefRefPtr<CefBrowser> browser = ClientHandler::GetBrowserForNativeWindow(targetWindow);
-      g_handler->SendOpenFileCommand(browser, CefString([[url absoluteString] UTF8String]));
+      std::string files = ("[\"" + std::string([[url absoluteString] UTF8String]) + "\"]");
+      g_handler->SendOpenFileCommand(browser, CefString(files));
     }
   } else {
     // App is just starting up. Save the filename so we can open it later.
