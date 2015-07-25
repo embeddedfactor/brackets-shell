@@ -537,6 +537,7 @@ extern NSMutableArray* pendingOpenFiles;
 - (void)createApp:(id)object;
 - (BOOL)application:(NSApplication *)theApplication openFile:(NSString *)filename;
 - (BOOL)application:(NSApplication *)theApplication openFiles:(NSArray *)filenames;
+- (BOOL)application:(NSApplication *)theApplication openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation;
 @end
 
 
@@ -762,6 +763,22 @@ extern NSMutableArray* pendingOpenFiles;
   }
   return YES;
 }
+
+- (BOOL)application:(NSApplication *)theApplication openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation {
+  if (!pendingOpenFiles) {
+    ClientApplication * clientApp = (ClientApplication *)theApplication;
+    NSWindow* targetWindow = [clientApp findTargetWindow];
+    if (targetWindow) {
+      CefRefPtr<CefBrowser> browser = ClientHandler::GetBrowserForNativeWindow(targetWindow);
+      g_handler->SendOpenFileCommand(browser, CefString([[url absoluteString] UTF8String]));
+    }
+  } else {
+    // App is just starting up. Save the filename so we can open it later.
+    [pendingOpenFiles addObject:[url absoluteString]];
+  }
+  return YES;
+}
+
 @end
 
 
