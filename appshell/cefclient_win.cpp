@@ -83,6 +83,10 @@ bool IsFilename(const std::wstring& str) {
     return (GetFileAttributes(temp.c_str()) != INVALID_FILE_ATTRIBUTES);
 }
 
+bool IsURL(const std::wstring &str) {
+    return str.find(L"akraja:") == 0;
+}
+
 std::wstring GetFilenamesFromCommandLine() {
     std::wstring result = L"[]";
 
@@ -95,7 +99,7 @@ std::wstring GetFilenamesFromCommandLine() {
         result = L"[";
         for (iterator = args.begin(); iterator != args.end(); iterator++) {
             std::wstring argument = (*iterator).ToWString();
-            if (IsFilename(argument)) {
+            if (IsURL(argument) || IsFilename(argument)) {
                 if (!firstEntry) {
                     result += L",";
                 }

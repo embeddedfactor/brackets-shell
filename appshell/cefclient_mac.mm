@@ -765,6 +765,8 @@ extern NSMutableArray* pendingOpenFiles;
 }
 
 - (BOOL)application:(NSApplication *)theApplication openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation {
+  [self alert:@"URL Open " withMessage: [url absoluteString]];
+  
   if (!pendingOpenFiles) {
     ClientApplication * clientApp = (ClientApplication *)theApplication;
     NSWindow* targetWindow = [clientApp findTargetWindow];
