@@ -22,16 +22,19 @@ for (int i = 0; i < platforms.size(); i++) {
       checkout scm
       //Patch first
       if (platform == 'win32') {
-        sh 'npm install --msvs_version=2013'
-        sh 'npm install grunt-cli --msvs_version=2013'
+        env.NPM_EXTRA = '--msvs_version=2013'
       } else {
-        sh 'npm install'
-        sh 'npm install grunt-cli'
+        env.NPM_EXTRA = ''
       }
-      sh 'node_modules/.bin/grunt'
-      //sh 'cp ../package.json www_package.json'
-      sh 'node_modules/.bin/grunt stage'
-      sh 'tar -czf ../shell-pack-${PLATFORM}.tar.gz staging'
+      sh '''
+        export PATH="/c/nodejs/x64/v7.9.0/bin:/opt/nodejs/x64/v7.9.0/bin:$PATH"
+        npm install ${NPM_EXTRA}
+        npm install grunt-cli ${NPM_EXTRA}
+
+        node_modules/.bin/grunt
+        node_modules/.bin/grunt stage
+        tar -czf ../shell-pack-${PLATFORM}.tar.gz staging
+      '''
       archiveArtifacts artifacts: '*.tar.gz', fingerprint: true
     }
   }
