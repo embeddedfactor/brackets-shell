@@ -26,12 +26,13 @@ for (int i = 0; i < platforms.size(); i++) {
       } else {
         env.NPM_EXTRA = ''
       }
-      if (platform === "darwin") {
-        staging = "installer/mac/staging/*.app";
-      } else if (platform === "win32") {
-        staging = "installer/win/staging";
+      def staging = ''
+      if (platform == "darwin") {
+        staging = "installer/mac/staging/*.app"
+      } else if (platform == "win32") {
+        staging = "installer/win/staging"
       } else {
-        staging = "installer/linux/debian/package-root/opt/*";
+        staging = "installer/linux/debian/package-root/opt/*"
       }
       env.STAGING = staging
       sh '''
