@@ -42,7 +42,7 @@ for (int i = 0; i < platforms.size(); i++) {
 
         node_modules/.bin/grunt
         node_modules/.bin/grunt stage
-        tar -C `dirname ${STAGING}` -czf shell-pack-${PLATFORM}.tar.gz ${STAGING}
+        tar -C `dirname ${STAGING}` -czf shell-pack-${PLATFORM}.tar.gz `basename ${STAGING}`
       '''
       archiveArtifacts artifacts: '*.tar.gz', fingerprint: true
     }
