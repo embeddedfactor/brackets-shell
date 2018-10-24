@@ -1,6 +1,4 @@
 #!groovy
-
-def project = "brackets-shell"
 def platforms = [
   [platform: 'linux', host: 'trustydev', python: 'python2', bear: 'bear'],
   [platform: 'win32', host: 'windows7dev'],
@@ -33,8 +31,8 @@ for (int i = 0; i < platforms.size(); i++) {
       sh 'node_modules/.bin/grunt'
       //sh 'cp ../package.json www_package.json'
       sh 'node_modules/.bin/grunt stage'
-      tar -czf ../shell-pack-${PLATFORM}.tar.gz staging
-      archiveArtifacts artifacts: "*.tar.gz", fingerprint: true
+      sh 'tar -czf ../shell-pack-${PLATFORM}.tar.gz staging'
+      archiveArtifacts artifacts: '*.tar.gz', fingerprint: true
     }
   }
 }
@@ -42,4 +40,3 @@ for (int i = 0; i < platforms.size(); i++) {
 stage('Build') {
   parallel builds
 }
-
