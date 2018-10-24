@@ -16,16 +16,24 @@ for (int i = 0; i < platforms.size(); i++) {
     node(host) {
       echo 'Cleanup Workspace'
       deleteDir()
-      env.PLATFORM = platform
 
       echo 'Checkout SCM'
       checkout scm
       //Patch first
+      env.PLATFORM = platform
       if (platform == 'win32') {
         env.NPM_EXTRA = '--msvs_version=2013'
       } else {
         env.NPM_EXTRA = ''
       }
+      if (platform === "darwin") {
+        staging = "installer/mac/staging/*.app";
+      } else if (platform === "win32") {
+        staging = "installer/win/staging";
+      } else {
+        staging = "installer/linux/debian/package-root/opt/*";
+      }
+      env.STAGING = staging
       sh '''
         export PATH="/c/nodejs/x64/v7.9.0/bin:/opt/nodejs/x64/v7.9.0/bin:$PATH"
         npm install ${NPM_EXTRA}
@@ -33,7 +41,7 @@ for (int i = 0; i < platforms.size(); i++) {
 
         node_modules/.bin/grunt
         node_modules/.bin/grunt stage
-        tar -czf ../shell-pack-${PLATFORM}.tar.gz staging
+        tar -C '$(dirname ${STAGING})' -czf shell-pack-${PLATFORM}.tar.gz ${STAGING}
       '''
       archiveArtifacts artifacts: '*.tar.gz', fingerprint: true
     }
