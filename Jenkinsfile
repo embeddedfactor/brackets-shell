@@ -7,16 +7,16 @@ def platforms = [
   [platform: 'darwin', host: 'macossierradev']
 ]
 
-def nodejs_builds = [:]
+def builds = [:]
 
 for (int i = 0; i < platforms.size(); i++) {
   def platform = platforms[i].get('platform')
   def host = platforms[i].get('host')
   def python = platforms[i].get('python', 'python')
   def bear = platforms[i].get('bear', '')
-  nodejs_builds[platform] = {
+  builds[platform] = {
     node(host) {
-      echo('Cleanup Workspace')
+      echo 'Cleanup Workspace'
       deleteDir()
       env.PLATFORM = platform
 
@@ -38,3 +38,8 @@ for (int i = 0; i < platforms.size(); i++) {
     }
   }
 }
+
+stage('Build') {
+  parallel builds
+}
+
