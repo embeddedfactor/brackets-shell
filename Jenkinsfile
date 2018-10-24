@@ -22,7 +22,7 @@ for (int i = 0; i < platforms.size(); i++) {
 
       echo 'Checkout SCM'
       checkout scm
-      # Patch first
+      //Patch first
       if (platform == 'win32') {
         sh 'npm install --msvs_version=2013'
         sh 'npm install grunt-cli --msvs_version=2013'
@@ -31,7 +31,7 @@ for (int i = 0; i < platforms.size(); i++) {
         sh 'npm install grunt-cli'
       }
       sh 'node_modules/.bin/grunt'
-      #sh 'cp ../package.json www_package.json'
+      //sh 'cp ../package.json www_package.json'
       sh 'node_modules/.bin/grunt stage'
       tar -czf ../shell-pack-${PLATFORM}.tar.gz staging
       archiveArtifacts artifacts: "*.tar.gz", fingerprint: true
