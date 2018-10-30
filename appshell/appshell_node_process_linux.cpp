@@ -91,100 +91,100 @@ void* nodeThread(void* unused) {
             pthread_mutex_unlock(&mutex);
             return NULL;
         }
+      // strip off trailing executable name
+      char* lastIndexOf = strrchr(executablePath, '/');
+      memcpy(bracketsDirPath, executablePath, lastIndexOf - executablePath + 1);
 
-    // strip off trailing executable name
-    char* lastIndexOf = strrchr(executablePath, '/');
-    memcpy(bracketsDirPath, executablePath, lastIndexOf - executablePath + 1);
+      // null terminate the string
+      bracketsDirPath[lastIndexOf - executablePath + 1] = '\0';
+      
+      // create node exec and node-core paths
+      strcpy(nodeExecutablePath, bracketsDirPath);
+      strcat(nodeExecutablePath, NODE_EXECUTABLE_PATH);
+      strcpy(nodecorePath, bracketsDirPath);
+      strcat(nodecorePath, NODE_CORE_PATH);
+      
+      // create pipes for node process stdin/stdout
+      int toNode[2];
+      int fromNode[2];
+      
+      pipe(toNode);
+      pipe(fromNode);
+      
+      // create the Node process
+      pid_t child_pid = fork();
+      if (child_pid == 0) { // child (node) process
+          // close our copy of write end and
+          // connect read end to stdin
+          close(toNode[1]);
+          dup2(toNode[0], STDIN_FILENO);
+          
+          // create node exec and node-core paths
+          strcpy(nodeExecutablePath, bracketsDirPath);
+          strcat(nodeExecutablePath, NODE_EXECUTABLE_PATH);
+          strcpy(nodecorePath, bracketsDirPath);
+          strcat(nodecorePath, NODE_CORE_PATH);
+          
+          // create pipes for node process stdin/stdout
+          int toNode[2];
+          int fromNode[2];
+          
+          pipe(toNode);
+          pipe(fromNode);
+          
+          // create the Node process
+          pid_t child_pid = fork();
+          if (child_pid == 0) { // child (node) process
+              // close our copy of write end and
+              // connect read end to stdin
+              close(toNode[1]);
+              dup2(toNode[0], STDIN_FILENO);
+              
+              // close our copy of read end and
+              // connect write end to stdout
+              close(fromNode[0]);
+              dup2(fromNode[1], STDOUT_FILENO);
+              
+              // run node executable
+              char* arg_list[] = { nodeExecutablePath, nodecorePath, NULL};
+              execvp(arg_list[0], arg_list);
+              
+              fprintf(stderr, "the Node process failed to start: %s\n", strerror(errno));
+              abort();
+          } else { // parent
+              
+              // close our reference of toNode's read end
+              // and fromNode's write end
+              close(toNode[0]);
+              close(fromNode[1]);
+              
+              // convert subprocess write & read to FILE objects
+              streamTo = fdopen(toNode[1], "w");
+              streamFrom = fdopen(fromNode[0], "r");
 
-    // null terminate the string
-    bracketsDirPath[lastIndexOf - executablePath + 1] = '\0';
-    
-    // create node exec and node-core paths
-    strcpy(nodeExecutablePath, bracketsDirPath);
-    strcat(nodeExecutablePath, NODE_EXECUTABLE_PATH);
-    strcpy(nodecorePath, bracketsDirPath);
-    strcat(nodecorePath, NODE_CORE_PATH);
-    
-    // create pipes for node process stdin/stdout
-    int toNode[2];
-    int fromNode[2];
-    
-    pipe(toNode);
-    pipe(fromNode);
-    
-    // create the Node process
-    pid_t child_pid = fork();
-    if (child_pid == 0) { // child (node) process
-        // close our copy of write end and
-        // connect read end to stdin
-        close(toNode[1]);
-        dup2(toNode[0], STDIN_FILENO);
-        
-        // create node exec and node-core paths
-        strcpy(nodeExecutablePath, bracketsDirPath);
-        strcat(nodeExecutablePath, NODE_EXECUTABLE_PATH);
-        strcpy(nodecorePath, bracketsDirPath);
-        strcat(nodecorePath, NODE_CORE_PATH);
-        
-        // create pipes for node process stdin/stdout
-        int toNode[2];
-        int fromNode[2];
-        
-        pipe(toNode);
-        pipe(fromNode);
-        
-        // create the Node process
-        pid_t child_pid = fork();
-        if (child_pid == 0) { // child (node) process
-            // close our copy of write end and
-            // connect read end to stdin
-            close(toNode[1]);
-            dup2(toNode[0], STDIN_FILENO);
-            
-            // close our copy of read end and
-            // connect write end to stdout
-            close(fromNode[0]);
-            dup2(fromNode[1], STDOUT_FILENO);
-            
-            // run node executable
-            char* arg_list[] = { nodeExecutablePath, nodecorePath, NULL};
-            execvp(arg_list[0], arg_list);
-            
-            fprintf(stderr, "the Node process failed to start: %s\n", strerror(errno));
-            abort();
-        }
-        else { // parent
-            
-            // close our reference of toNode's read end
-            // and fromNode's write end
-            close(toNode[0]);
-            close(fromNode[1]);
-            
-            // convert subprocess write & read to FILE objects
-            streamTo = fdopen(toNode[1], "w");
-            streamFrom = fdopen(fromNode[0], "r");
-
-            nodeState = BRACKETS_NODE_PORT_NOT_YET_SET;
-        
-            // done launching process so release mutex
-            if (pthread_mutex_unlock(&mutex)) {
-                fprintf(stderr, 
-                    "failed to release mutex for Node subprocess startup: %s\n",
-                    strerror(errno));
-            }
-            
-            // start pipe read thread
-            pthread_t readthread_id;
-            if (pthread_create(&readthread_id, NULL, &nodeReadThread, NULL) != 0)
-                nodeState = BRACKETS_NODE_FAILED;
-                // ugly - need to think more about what to do if read thread fails
-            int status;
-            waitpid(child_pid, &status, 0);
-            fprintf(stderr, 
-                    "child exited : %d\n",
-                    status);
-        }
+              nodeState = BRACKETS_NODE_PORT_NOT_YET_SET;
+          
+              // done launching process so release mutex
+              if (pthread_mutex_unlock(&mutex)) {
+                  fprintf(stderr, 
+                      "failed to release mutex for Node subprocess startup: %s\n",
+                      strerror(errno));
+              }
+              
+              // start pipe read thread
+              pthread_t readthread_id;
+              if (pthread_create(&readthread_id, NULL, &nodeReadThread, NULL) != 0)
+                  nodeState = BRACKETS_NODE_FAILED;
+                  // ugly - need to think more about what to do if read thread fails
+              int status;
+              waitpid(child_pid, &status, 0);
+              fprintf(stderr, 
+                      "child exited : %d\n",
+                      status);
+          }
+      }
     }
+
     return NULL;
 }
 

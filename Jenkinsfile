@@ -36,11 +36,11 @@ for (int i = 0; i < platforms.size(); i++) {
       }
       env.STAGING = staging
       sh '''
-        export PATH="/c/nodejs/x64/v7.9.0/bin:/opt/nodejs/x64/v7.9.0/bin:$PATH"
+        export PATH="/c/nodejs/x64/v6.9.4/bin:/opt/nodejs/x64/v6.9.4/bin:$PATH"
         npm install ${NPM_EXTRA}
         npm install grunt-cli ${NPM_EXTRA}
 
-        node_modules/.bin/grunt
+        node_modules/.bin/grunt --force
         node_modules/.bin/grunt stage
         tar -C `dirname ${STAGING}` -czf shell-pack-${PLATFORM}.tar.gz `basename ${STAGING}`
       '''
