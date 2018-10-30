@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
+ * Copyright (c) 2013 - present Adobe Systems Incorporated. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -19,8 +19,11 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
+
 #include "native_menu_model.h"
+
 #include "command_callbacks.h"
+#include "config.h"
 
 #if defined(OS_WIN)
 const ExtensionString WINDOW_COMMAND    = L"window";
@@ -92,6 +95,22 @@ ExtensionString NativeMenuModel::getParentId(int tag) {
         return ExtensionString();
     }
     return menuItems[tag].parentId;
+}
+
+ExtensionString NativeMenuModel::getKey(int tag) {
+    menu::iterator foundItem = menuItems.find(tag);
+    if(foundItem == menuItems.end()) {
+        return ExtensionString();
+    }
+    return menuItems[tag].key;
+}
+
+void NativeMenuModel::setKey (int tag, ExtensionString theKey) {
+    menu::iterator foundItem = menuItems.find(tag);
+    if(foundItem == menuItems.end()) {
+        return;
+    }
+    menuItems[tag].key = theKey;
 }
 
 int NativeMenuModel::getOrCreateTag(ExtensionString command, ExtensionString parent)

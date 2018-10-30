@@ -1,6 +1,5 @@
-#pragma once
 /*
- * Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
+ * Copyright (c) 2013 - present Adobe Systems Incorporated. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -20,6 +19,9 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
+
+#pragma once
+
 #include <windows.h>
 #include <winuser.h>
 #include <Shellapi.h>
@@ -73,6 +75,7 @@ static __inline int RectHeight(const RECT &rIn)
 #ifndef DCX_USESTYLE
 #define DCX_USESTYLE 0x00010000
 #endif
+
 
 // cef_window is a basic HWND wrapper
 //  that can be used to wrap any HWND 
@@ -169,10 +172,10 @@ public:
     HDC GetWindowDC()
     { return ::GetWindowDC(mWnd); }
 
-    HDC GetDC()
+    HDC GetDC() const
     { return ::GetDC(mWnd); }
 
-    int ReleaseDC(HDC dc)
+    int ReleaseDC(HDC dc) const
     { return ::ReleaseDC(mWnd, dc); }
 
     BOOL SetWindowPos(cef_window* insertAfter, int x, int y, int cx, int cy, UINT uFlags) 
@@ -228,6 +231,8 @@ public:
 
     HWND GetWindow(UINT uCmd) 
     { return ::GetWindow(mWnd, uCmd); }
+
+	UINT GetDPIScalingX() const;
 
 protected:
     // Attributes - Protected Members

@@ -50,7 +50,7 @@
                            Value="SOFTWARE\$(var.RegistryRoot)\Capabilities" Type="string" />
 
             <!-- File associations -->
-            <?define SupportedFiletypes=txt;groovy;ini;properties;css;scss;html;htm;shtm;shtml;xhtml;cfm;cfm1;cfc;dhtml;xht;tpl;twig;hbs;handlebars;kit;jsp;aspx;ejs;js;jsx;json;svg;xml;wxs;wxl;wsdl;rss;atom;rdf;xslt;xul;xbl;mathml;config;php;php3;php4;php5;phtm;phtml;ctp;c;h;i;cc;cp;cpp;c++;cxx;hh;hpp;hxx;h++;ii;cs;cshtml;asax;ashx;java;scala;sbt;coffee;cson;cf;clj;pl;pm;rb;ru;gemspec;rake;py;pyw;wsgi;sass;less;lua;sql;diff;patch;md;markdown;yaml;yml;hx;sh?>
+            <?define SupportedFiletypes=css;scss;html;htm;shtm;shtml;xhtml;cfm;cfm1;cfc;dhtml;xht;tpl;twig;hbs;handlebars;kit;jsp;aspx;ejs;js;jsx;json;svg;xml;rss;atom;rdf;xslt;xul;xbl;mathml;php;php3;php4;php5;phtm;phtml;ctp;cshtml;asax;ashx;coffee;cson;cf;clj;wsgi;sass;less;sql;diff;patch;md;markdown;yaml;yml;hx?>
 
             <?foreach filetype in $(var.SupportedFiletypes)?>
                 <!-- associate program with file type -->
@@ -61,7 +61,7 @@
                 <RegistryValue Root="HKCR" Key=".$(var.filetype)\OpenWithProgids" Value=""
                                Name="!(loc.ProductName) FileExt" Type="string" />
             <?endforeach?>
-
+            
             <!-- create ProgId entry -->
             <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\!(loc.ProductName) FileExt\shell\open\command"
                            Value="&quot;[INSTALLDIR]$(var.ExeName).exe&quot; &quot;%1&quot;" Type="string" />
@@ -69,6 +69,44 @@
                            Value="[INSTALLDIR]$(var.ExeName).exe,0" Type="string" />
             <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\!(loc.ProductName) FileExt\shell\open"
                            Name="FriendlyAppName" Value="!(loc.ProductName)" Type="string" />
+
+            <!-- Add an entry to make sure it is runnable via Run Command  -->
+            <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Brackets.exe" Value="[INSTALLDIR]$(var.ExeName).exe"
+                               Type="string" />
+        </Component>
+
+        <Component Id="AddContextMenu"
+                         Guid="5E95F75D-91C4-44B6-B8A3-83005388B4BF" Directory="INSTALLDIR" KeyPath="yes">
+            <Condition>ADDCONTEXTMENU="1" OR CONTEXTMENUREGISTRY</Condition>        
+            <!-- Add Open With Brackets to explorer's file context menu -->
+            <RegistryValue Root="HKCR" Key="*\shell\!(loc.ProductName)" Value="!(loc.ExplorerFileOpenContextMenu)"
+                               Type="string" />
+
+            <RegistryValue Root="HKCR" Key="*\shell\!(loc.ProductName)" Name="Icon" Value="[INSTALLDIR]$(var.ExeName).exe"
+                               Type="string" />
+
+            <RegistryValue Root="HKCR" Key="*\shell\!(loc.ProductName)\command" Value="[INSTALLDIR]$(var.ExeName).exe &quot;%1&quot;"
+                               Type="string" />
+
+            <!-- Add Open With Brackets to explorer's folder context menu -->
+            <RegistryValue Root="HKCR" Key="directory\shell\!(loc.ProductName)" Value="!(loc.ExplorerDirectoryOpenContextMenu)"
+                               Type="string" />
+
+            <RegistryValue Root="HKCR" Key="directory\shell\!(loc.ProductName)" Name="Icon" Value="[INSTALLDIR]$(var.ExeName).exe"
+                               Type="string" />
+
+            <RegistryValue Root="HKCR" Key="directory\shell\!(loc.ProductName)\command" Value="[INSTALLDIR]$(var.ExeName).exe &quot;%1&quot;"
+                               Type="string" />
+
+            <RegistryValue Root="HKCR" Key="directory\background\shell\!(loc.ProductName)" Value="!(loc.ExplorerDirectoryOpenContextMenu)"
+                               Type="string" />
+
+            <RegistryValue Root="HKCR" Key="directory\background\shell\!(loc.ProductName)" Name="Icon" Value="[INSTALLDIR]$(var.ExeName).exe"
+                               Type="string" />
+
+            <RegistryValue Root="HKCR" Key="directory\background\shell\!(loc.ProductName)\command" Value="[INSTALLDIR]$(var.ExeName).exe &quot;%V&quot;"
+                               Type="string" />
+
         </Component>
         
         <!-- Start Menu Shortcuts-->
@@ -76,18 +114,70 @@
         <UIRef Id="WixUI_ErrorProgressText" />
 
         <!-- Launch app after install -->
-<!--
+
         <Property Id="LAUNCHAPPONEXIT" Value="1" />
+        <Property Id="LAUNCH_APPLICATION_SILENT" Value="0" />
+        <Property Id="MSIFASTINSTALL" Value="3"/>
+
         <Property Id="WixShellExecTarget" Value="[#fil7EE01D0693DA0F92C26C5F3007D1BF2C]" />
         <CustomAction Id="LaunchApplication" FileKey="fil7EE01D0693DA0F92C26C5F3007D1BF2C" ExeCommand=""
                       Execute="immediate" Impersonate="yes" Return="asyncNoWait" />
--->
-        <UI>
+
+        <CustomAction Id="LaunchApplicationCancel"
+                      Return="check"
+                      Execute="immediate"
+                      BinaryKey="BracketsExecutor.dll"
+                      DllEntry="LaunchBrackets" />
+        
+        <CustomAction Id="LaunchApplicationError"
+                      Return="check"
+                      Execute="immediate"
+                      BinaryKey="BracketsExecutor.dll"
+                      DllEntry="LaunchBrackets" />
+        
+        <CustomAction Id="LaunchApplicationSuspend"
+                      Return="check"
+                      Execute="immediate"
+                      BinaryKey="BracketsExecutor.dll"
+                      DllEntry="LaunchBrackets" />
+
+        <Property Id="INSTALLDIRREGISTRY">
+            <RegistrySearch Id="InstallDirRegistryID"
+                            Root="HKLM" 
+                            Type="raw"
+                            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\$(var.ExeName).exe"
+            />
+        </Property>
+
+        <Property Id="CONTEXTMENUREGISTRY">
+            <RegistrySearch Id="ContextMenuRegistryID"
+                            Root="HKCR" 
+                            Type="raw"
+                            Key="directory\shell\!(loc.ProductName)"
+            />
+        </Property>
+
+        <SetProperty Id="CURRENTPATH"
+             Before="CostInitialize" 
+             Sequence="execute"
+             Value="[%PATH]" />
+
+        <Binary Id="InstallLocationChecker.dll" SourceFile="BracketsConfigurator.CA.dll" />
+        <Binary Id="BracketsExecutor.dll" SourceFile="LaunchBrackets.CA.dll" />
+
+        <CustomAction Id="InstallDirCustomAction"
+                      Return="check"
+                      Execute="immediate"
+                      BinaryKey="InstallLocationChecker.dll"
+                      DllEntry="BracketsConfigurator" />
+
+
+		<UI>
             <Publish Dialog="MyExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
-<!--
-            <Publish Dialog="MyExitDialog" Control="Finish" Order="1" Event="DoAction"
+			<!--
+            	<Publish Dialog="MyExitDialog" Control="Finish" Order="1" Event="DoAction"
                      Value="LaunchApplication">LAUNCHAPPONEXIT=1 and NOT INSTALLED AND NOT REMOVE="ALL"</Publish>
--->
+			-->
         </UI>
 
         <!-- Add image assets -->
@@ -96,7 +186,20 @@
         <!--Setup Folder Structure -->
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='ProgramFilesFolder'>
-                <Directory Id='INSTALLDIR' Name='!(loc.ShortProductName)'/>
+                <Directory Id='INSTALLDIR' Name='!(loc.ShortProductName)'>
+                  <Component Id="UpdatePath"
+                             Guid="1781A625-8ACB-45E7-A8BA-219D81760B2E">
+                             <Condition>UPDATEPATH="1"</Condition>
+                    <CreateFolder />
+                    <Environment Id="PATH"
+                                 Action="set"
+                                 Part="last"
+                                 Name="PATH"
+                                 Permanent="no"
+                                 System="yes"
+                                 Value="[INSTALLDIR]command" />
+                  </Component>
+                </Directory>
             </Directory>
             <Directory Id="ProgramMenuFolder"/>
         </Directory>
@@ -111,9 +214,39 @@
             <ComponentRef  Id='StartMenuShortcut' />
 
             <ComponentRef  Id='FileAssociations' />
-        </Feature>                  
+        </Feature>
 
+        <Feature Id="UpdatePath" Title="Updating Path Variable" Level="1">
+            <ComponentRef  Id="UpdatePath" />
+        </Feature>
+        
+        <Feature Id="AddContextMenu" Title="Adding Context Menus" Level="1">
+            <ComponentRef  Id="AddContextMenu" />
+        </Feature>
+        
+        <!-- Hack to make installer send WM_STATE_CHANGE message -->
+
+        <!-- Include the Custom Actions library - currently just to send notification of Environment changes. -->
+        <Binary Id="CustomEnvAction.dll" SourceFile="CustomEnvAction.dll" />
+
+        <!-- Define the custom action to broadcast Environment Variables change. -->
+        <CustomAction Id="BroadcastEnvironmentVariablesChange"
+                      Return="check"
+                      Execute="immediate"
+                      BinaryKey="CustomEnvAction.dll"
+                      DllEntry="BroadcastEnvironmentVariablesChange" />
+        
+        <InstallExecuteSequence>
+            <Custom Action="BroadcastEnvironmentVariablesChange" After="InstallFinalize"/> 
+            <Custom Action="InstallDirCustomAction" Before="CostFinalize">LAUNCH_APPLICATION_SILENT = 1</Custom>
+            <Custom Action="LaunchApplication" After="InstallFinalize">LAUNCH_APPLICATION_SILENT = 1</Custom>
+            <Custom Action="LaunchApplicationCancel" OnExit="cancel">LAUNCH_APPLICATION_SILENT = 1</Custom>
+            <Custom Action="LaunchApplicationError" OnExit="error">LAUNCH_APPLICATION_SILENT = 1</Custom>
+            <Custom Action="LaunchApplicationSuspend" OnExit="suspend">LAUNCH_APPLICATION_SILENT = 1</Custom>
+        </InstallExecuteSequence>
+        
         <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLDIR]" After="CostFinalize" />    
+
     </Product>
 </Wix>
 

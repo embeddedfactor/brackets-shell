@@ -1,26 +1,25 @@
 /*
-* Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
-*  
-* Permission is hereby granted, free of charge, to any person obtaining a
-* copy of this software and associated documentation files (the "Software"), 
-* to deal in the Software without restriction, including without limitation 
-* the rights to use, copy, modify, merge, publish, distribute, sublicense, 
-* and/or sell copies of the Software, and to permit persons to whom the 
-* Software is furnished to do so, subject to the following conditions:
-*  
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*  
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
-* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
-* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
-* DEALINGS IN THE SOFTWARE.
-* 
-*/ 
-
+ * Copyright (c) 2013 - present Adobe Systems Incorporated. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ *
+ */
 
 #include "appshell_node_process.h"
 #include "appshell_node_process_internal.h"
@@ -34,9 +33,6 @@
 #include <sys/wait.h>
 
 
-#ifndef OS_LINUX
-#define OS_LINUX 1
-#endif
 #include "config.h"
 
 #define BRACKETS_NODE_BUFFER_SIZE 4096
@@ -96,10 +92,33 @@ void* nodeThread(void* unused) {
             return NULL;
         }
 
+    // strip off trailing executable name
+    char* lastIndexOf = strrchr(executablePath, '/');
+    memcpy(bracketsDirPath, executablePath, lastIndexOf - executablePath + 1);
 
-        // strip off trailing executable name
-        char* lastIndexOf = strrchr(executablePath, '/');
-        memcpy(bracketsDirPath, executablePath, lastIndexOf - executablePath + 1);
+    // null terminate the string
+    bracketsDirPath[lastIndexOf - executablePath + 1] = '\0';
+    
+    // create node exec and node-core paths
+    strcpy(nodeExecutablePath, bracketsDirPath);
+    strcat(nodeExecutablePath, NODE_EXECUTABLE_PATH);
+    strcpy(nodecorePath, bracketsDirPath);
+    strcat(nodecorePath, NODE_CORE_PATH);
+    
+    // create pipes for node process stdin/stdout
+    int toNode[2];
+    int fromNode[2];
+    
+    pipe(toNode);
+    pipe(fromNode);
+    
+    // create the Node process
+    pid_t child_pid = fork();
+    if (child_pid == 0) { // child (node) process
+        // close our copy of write end and
+        // connect read end to stdin
+        close(toNode[1]);
+        dup2(toNode[0], STDIN_FILENO);
         
         // create node exec and node-core paths
         strcpy(nodeExecutablePath, bracketsDirPath);

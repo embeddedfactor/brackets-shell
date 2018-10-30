@@ -11,7 +11,6 @@
 #include <string>
 #include "include/base/cef_lock.h"
 #include "include/cef_client.h"
-#include "util.h"
 #include "command_callbacks.h"
 
 #include <algorithm> 
@@ -31,7 +30,9 @@
 // ClientHandler implementation.
 class ClientHandler : public CefClient,
                       public CefLifeSpanHandler,
+                      #ifndef OS_LINUX
                       public CefDragHandler,
+                      #endif
                       public CefLoadHandler,
                       public CefRequestHandler,
                       public CefDisplayHandler,
@@ -83,9 +84,13 @@ public:
   virtual CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() OVERRIDE {
     return this;
   }
+
+  #ifndef OS_LINUX
   virtual CefRefPtr<CefDragHandler> GetDragHandler() OVERRIDE {
     return this;
   }
+  #endif
+
   virtual CefRefPtr<CefLoadHandler> GetLoadHandler() OVERRIDE {
     return this;
   }
@@ -112,26 +117,34 @@ public:
   } 
 
   // CefLifeSpanHandler methods
-  virtual bool OnBeforePopup(CefRefPtr<CefBrowser> browser,
-                             CefRefPtr<CefFrame> frame,
-                             const CefString& target_url,
-                             const CefString& target_frame_name,
-                             const CefPopupFeatures& popupFeatures,
-                             CefWindowInfo& windowInfo,
-                             CefRefPtr<CefClient>& client,
-                             CefBrowserSettings& settings,
-                             bool* no_javascript_access) OVERRIDE;
+virtual bool OnBeforePopup(CefRefPtr<CefBrowser> browser,
+                           CefRefPtr<CefFrame> frame,
+                           const CefString& target_url,
+                           const CefString& target_frame_name,
+                           CefLifeSpanHandler::WindowOpenDisposition target_disposition,
+                           bool user_gesture,
+                           const CefPopupFeatures& popupFeatures,
+                           CefWindowInfo& windowInfo,
+                           CefRefPtr<CefClient>& client,
+                           CefBrowserSettings& settings,
+                           bool* no_javascript_access) OVERRIDE;
   virtual void OnAfterCreated(CefRefPtr<CefBrowser> browser) OVERRIDE;
   virtual void OnBeforeClose(CefRefPtr<CefBrowser> browser) OVERRIDE;
   
+  #ifndef OS_LINUX
   // CefDragHandler methods
   virtual bool OnDragEnter(CefRefPtr<CefBrowser> browser,
                            CefRefPtr<CefDragData> dragData,
                            DragOperationsMask mask) OVERRIDE;
+  #endif
 
   // CefLoadHandler methods
   virtual void OnLoadStart(CefRefPtr<CefBrowser> browser,
-                           CefRefPtr<CefFrame> frame) OVERRIDE;
+                           CefRefPtr<CefFrame> frame
+                    #ifdef OS_LINUX
+                           ,TransitionType transition_type
+                    #endif
+                           ) OVERRIDE;
   virtual void OnLoadEnd(CefRefPtr<CefBrowser> browser,
                          CefRefPtr<CefFrame> frame,
                          int httpStatusCode) OVERRIDE;
@@ -217,7 +230,8 @@ public:
   void SendNotification(NotificationType type);
   void CloseMainWindow();
 
-  void ShowDevTools(CefRefPtr<CefBrowser> browser);  
+  virtual void ShowDevTools(CefRefPtr<CefBrowser> browserShowDevTools,
+                    const CefPoint& inspect_element_at);
                         
   // Call the "executeCommand" method, passing the command name.
   // If callback is specified, it will be called with the result from the command.

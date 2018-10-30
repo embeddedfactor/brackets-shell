@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
+ * Copyright (c) 2013 - present Adobe Systems Incorporated. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -20,11 +20,10 @@
  * DEALINGS IN THE SOFTWARE.
  *
  */
-/*global module, require*/
+
+"use strict";
 
 module.exports = function (grunt) {
-    "use strict";
-
     var common = require("./common")(grunt),
         semver = require("semver");
 
@@ -41,16 +40,15 @@ module.exports = function (grunt) {
 
         return newContent;
     }
-
-    // task: set-release
-    grunt.registerTask("set-release", "Update occurrences of release number for all native installers and binaries", function () {
+    
+    function setRelease() {
         var packageJsonPath             = "package.json",
             packageJSON                 = grunt.file.readJSON(packageJsonPath),
             winInstallerBuildXmlPath    = "installer/win/brackets-win-install-build.xml",
             buildInstallerScriptPath    = "installer/mac/buildInstaller.sh",
-            wxsPath                     = "installer/win/Brackets.wxs",
             versionRcPath               = "appshell/version.rc",
             infoPlistPath               = "appshell/mac/Info.plist",
+            linuxVersionFile            = "appshell/version_linux.h",
             release                     = grunt.option("release") || "",
             text,
             newVersion;
@@ -63,6 +61,7 @@ module.exports = function (grunt) {
 
         // 1. Update package.json
         packageJSON.version = newVersion.version + "-0";
+        packageJSON.prerelease = newVersion.prerelease.toString();
         common.writeJSON(packageJsonPath, packageJSON);
 
         // 2. Open installer/win/brackets-win-install-build.xml and change `product.release.number`
@@ -115,5 +114,23 @@ module.exports = function (grunt) {
             "$1" + newVersion.version + "$3"
         );
         grunt.file.write(infoPlistPath, text);
+
+        // 6. Open appshell/version_linux.h and change `APP_VERSION`
+        text = grunt.file.read(linuxVersionFile);
+        text = safeReplace(
+            text,
+            /APP_VERSION "(\d+\.\d+\.\d+\.\d+)"/,
+            'APP_VERSION "' + newVersion.major + "." + newVersion.minor + "." + newVersion.patch + "." + (newVersion.build.length ? newVersion.build : "0") + '"'
+        );
+        grunt.file.write(linuxVersionFile, text);
+    }
+
+    // task: set-release
+    grunt.registerTask("set-release", "Update occurrences of release number for all native installers and binaries", setRelease);
+    grunt.registerTask("set-release-optional", "Update occurrences of release number for all native installers and binaries", function () {
+        if (grunt.option("release")) {
+            setRelease();
+        }
     });
+    
 };

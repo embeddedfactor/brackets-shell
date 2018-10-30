@@ -33,7 +33,7 @@
         'SDKROOT': '',
         'CLANG_CXX_LANGUAGE_STANDARD' : 'c++0x',
         'COMBINE_HIDPI_IMAGES': 'YES',
-        'ARCHS': "$(ARCHS_STANDARD_32_BIT)",
+        'ARCHS': "$(ARCHS_STANDARD_64_BIT)",
         'FRAMEWORK_SEARCH_PATHS': [
           '$(inherited)',
           '$(CONFIGURATION)'
@@ -54,11 +54,11 @@
       ],
       'include_dirs': [
         '.',
+        'deps/icu/include',
       ],
       'sources': [
         '<@(includes_common)',
         '<@(includes_wrapper)',
-        '<@(appshell_sources_common)',
       ],
       'mac_bundle_resources': [
         '<@(appshell_bundle_resources_mac)',
@@ -77,6 +77,7 @@
         # Target build path.
         'SYMROOT': 'xcodebuild',
         'GCC_TREAT_WARNINGS_AS_ERRORS': 'NO',
+        'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
         'GCC_VERSION': 'com.apple.compilers.llvm.clang.1_0',
       },
       'conditions': [
@@ -125,6 +126,13 @@
               '-lrpcrt4.lib',
               '-lopengl32.lib',
               '-lglu32.lib',
+              '-luser32.lib',
+              '-lcomdlg32.lib',
+              '-lshell32.lib',
+              '-lole32.lib',
+              '-lgdi32.lib',
+              '-ldeps/icu/lib/icuin.lib',
+              '-ldeps/icu/lib/icuuc.lib',
               '-l$(ConfigurationName)/libcef.lib',
             ],
           },
@@ -159,7 +167,67 @@
               # Copy locales
               'destination': '<(PRODUCT_DIR)',
               'files': ['Resources/locales/'],
-            }
+            },
+            {
+              # Copy windows command line script
+              'destination': '<(PRODUCT_DIR)command',
+              'files': ['scripts/brackets.bat', 'scripts/brackets'],
+            },
+            {
+              # Copy ICU dlls
+              'destination': '<(PRODUCT_DIR)',
+              'files': ['deps/icu/bin/icuuc58.dll', 'deps/icu/bin/icuin58.dll', 'deps/icu/bin/icudt58.dll'],
+            },
+            {
+              # Copy VS2015 CRT dlls
+              'destination': '<(PRODUCT_DIR)',
+              'files': [
+                'deps/vs-crt/api-ms-win-core-console-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-handle-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-processenvironment-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-synch-l1-2-0.dll',
+                'deps/vs-crt/api-ms-win-crt-filesystem-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-runtime-l1-1-0.dll',
+                'deps/vs-crt/vccorlib140.dll',
+                'deps/vs-crt/api-ms-win-core-datetime-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-heap-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-processthreads-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-sysinfo-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-heap-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-stdio-l1-1-0.dll',
+                'deps/vs-crt/vcruntime140.dll',
+                'deps/vs-crt/api-ms-win-core-debug-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-interlocked-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-processthreads-l1-1-1.dll',
+                'deps/vs-crt/api-ms-win-core-timezone-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-locale-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-string-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-errorhandling-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-libraryloader-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-profile-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-util-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-math-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-time-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-file-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-localization-l1-2-0.dll',
+                'deps/vs-crt/api-ms-win-core-rtlsupport-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-conio-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-multibyte-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-utility-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-file-l1-2-0.dll',
+                'deps/vs-crt/api-ms-win-core-memory-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-string-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-convert-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-private-l1-1-0.dll',
+                'deps/vs-crt/msvcp140.dll',
+                'deps/vs-crt/api-ms-win-core-file-l2-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-namedpipe-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-core-synch-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-environment-l1-1-0.dll',
+                'deps/vs-crt/api-ms-win-crt-process-l1-1-0.dll',
+                'deps/vs-crt/ucrtbase.dll',
+                ],
+            },
           ],
         }],
         [ 'OS=="win" and multi_threaded_dll', {
@@ -189,7 +257,7 @@
           ],
           'copies': [
             {
-              # Add library dependencies to the bundle.
+              # Add libraries and helper app.
               'destination': '<(PRODUCT_DIR)/<(appname).app/Contents/Frameworks',
               'files': [
                 '<(PRODUCT_DIR)/<(appname) Helper.app',
@@ -198,7 +266,7 @@
           ],
           'postbuilds': [
             {
-             'postbuild_name': 'Add framework',
+              'postbuild_name': 'Add framework',
               'action': [
                 'cp',
                 '-Rf',
@@ -258,7 +326,11 @@
               '$(SDKROOT)/System/Library/Frameworks/AppKit.framework',
               '$(SDKROOT)/System/Library/Frameworks/Foundation.framework',
               '$(SDKROOT)/System/Library/Frameworks/ScriptingBridge.framework',
+              '$(SDKROOT)/System/Library/Frameworks/Security.framework',
               '$(CONFIGURATION)/<(framework_name).framework/<(framework_name)',
+              'deps/icu/lib/libicuuc.a',
+              'deps/icu/lib/libicui18n.a',
+              'deps/icu/lib/libicudata.a',
             ],
           },
           'sources': [
@@ -266,7 +338,7 @@
             '<@(appshell_sources_mac)',
           ],
         }],
-        ['OS=="linux" or OS=="freebsd" or OS=="openbsd"', {
+        [ 'OS=="linux" or OS=="freebsd" or OS=="openbsd"', {
           'actions': [
             {
               'action_name': 'appshell_extensions_js',
@@ -304,15 +376,25 @@
           },
           'copies': [
             {
-              'destination': '<(PRODUCT_DIR)/lib',
+              'destination': '<(PRODUCT_DIR)/files',
               'files': [
-                '<@(appshell_bundle_libraries_linux)',
+                '<@(appshell_bundle_resources_linux)',
               ],
             },
             {
-              'destination': '<(PRODUCT_DIR)',
+              'destination': '<(PRODUCT_DIR)/',
               'files': [
-                '<@(appshell_bundle_resources_linux)'
+                'Resources/cef.pak',
+                'Resources/cef_100_percent.pak',
+                'Resources/cef_200_percent.pak',
+                'Resources/cef_extensions.pak',
+                'Resources/devtools_resources.pak',
+                'Resources/icudtl.dat',
+                'Resources/locales/',
+                '$(BUILDTYPE)/chrome-sandbox',
+                '$(BUILDTYPE)/libcef.so',
+                '$(BUILDTYPE)/natives_blob.bin',
+                '$(BUILDTYPE)/snapshot_blob.bin',
               ],
             },
             {
@@ -329,25 +411,33 @@
               'files': ['appshell/node-core/'],
             },
           ],
-          'sources': [
-            '<@(includes_linux)',
-            '<@(appshell_sources_linux)',
+          'dependencies': [
+            'gtk',
           ],
           'dependencies': [
             'gtk'
           ],
           'link_settings': {
             'ldflags': [
-              # Look for libcef.so in the current directory. Path can also be
-              # specified using the LD_LIBRARY_PATH environment variable.
-              '-Wl,-rpath,\$$ORIGIN/lib',
+              '-pthread',
+              '-Wl,-rpath,\$$ORIGIN/',
+              '<(march)'
             ],
             'libraries': [
               "$(BUILDTYPE)/libcef.so",
-              "appshell_extensions_js.o",
               "-lX11",
+              'appshell_extensions_js.o',
+              'deps/icu/lib/libicuuc.a',
+              'deps/icu/lib/libicuio.a',
+              'deps/icu/lib/libicui18n.a',
+              'deps/icu/lib/libicudata.a',
+              '-ldl',
             ],
           },
+          'sources': [
+            '<@(includes_linux)',
+            '<@(appshell_sources_linux)',
+          ],
         }],
       ],
     },
@@ -378,13 +468,13 @@
         # Target build path.
         'SYMROOT': 'xcodebuild',
         'GCC_TREAT_WARNINGS_AS_ERRORS': 'NO',
+        'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
         'GCC_VERSION': 'com.apple.compilers.llvm.clang.1_0',
       },
       'conditions': [
         ['OS=="linux"', {
           'cflags': [
-          '<!@(<(pkg-config) --cflags gtk+-2.0 gthread-2.0)',
-          '<(march)',
+            '<(march)',
           ],
           'default_configuration': 'Release',
           'configurations': {
@@ -392,7 +482,7 @@
             'Debug': {},
           },
         }],
-        ['OS=="win" and multi_threaded_dll', {
+        [ 'OS=="win" and multi_threaded_dll', {
           'configurations': {
             'Common_Base': {
               'msvs_configuration_attributes': {
@@ -416,8 +506,8 @@
               },
             }
           }
-        }]
-      ]
+        }],
+      ],
     },
   ],
   'conditions': [
@@ -437,13 +527,18 @@
           ],
           'include_dirs': [
             '.',
+            'deps/icu/include',
           ],
           'link_settings': {
             'libraries': [
               '$(SDKROOT)/System/Library/Frameworks/AppKit.framework',
               '$(SDKROOT)/System/Library/Frameworks/Foundation.framework',
               '$(SDKROOT)/System/Library/Frameworks/ScriptingBridge.framework',
+              '$(SDKROOT)/System/Library/Frameworks/Security.framework',
               '$(CONFIGURATION)/<(framework_name).framework/<(framework_name)',
+              'deps/icu/lib/libicuuc.a',
+              'deps/icu/lib/libicui18n.a',
+              'deps/icu/lib/libicudata.a',
             ],
           },
           'sources': [
@@ -468,6 +563,7 @@
             'OTHER_LDFLAGS': ['-Wl,-headerpad_max_install_names'],
             'SYMROOT': 'xcodebuild',
             'GCC_TREAT_WARNINGS_AS_ERRORS': 'NO',
+            'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
             'GCC_VERSION': 'com.apple.compilers.llvm.clang.1_0',
             'FRAMEWORK_SEARCH_PATHS': [
               '$(inherited)',
@@ -501,7 +597,7 @@
           'variables': {
             # gtk requires gmodule, but it does not list it as a dependency
             # in some misconfigured systems.
-            'gtk_packages': 'gmodule-2.0 gtk+-2.0 gthread-2.0',
+            'gtk_packages': 'gmodule-2.0 gtk+-2.0 gthread-2.0 gtk+-unix-print-2.0',
           },
           'direct_dependent_settings': {
             'cflags': [
@@ -514,7 +610,6 @@
             ],
             'libraries': [
               '$(shell <(pkg-config) --libs-only-l <(gtk_packages))',
-              '-lpthread',
             ],
           },
         },

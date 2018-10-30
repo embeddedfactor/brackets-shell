@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
+ * Copyright (c) 2013 - present Adobe Systems Incorporated. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -20,14 +20,12 @@
  * DEALINGS IN THE SOFTWARE.
  *
  */
-/*jslint vars:true*/
-/*global module, require, process*/
-module.exports = function (grunt) {
-    "use strict";
 
+"use strict";
+
+module.exports = function (grunt) {
     var common          = require("./common")(grunt),
         fs              = require("fs"),
-        child_process   = require("child_process"),
         path            = require("path"),
         q               = require("q"),
         /* win only (lib), mac only (Resources, tools) */
@@ -102,8 +100,6 @@ module.exports = function (grunt) {
 
     // task: cef-clean
     grunt.registerTask("cef-clean", "Removes CEF binaries and linked folders", function () {
-        var path;
-
         // delete dev symlinks from "setup_for_hacking"
         common.deleteFile("Release/dev", { force: true });
         common.deleteFile("Debug/dev", { force: true });
@@ -125,6 +121,116 @@ module.exports = function (grunt) {
         // run curl
         grunt.log.writeln("Downloading " + grunt.config("cefZipSrc") + ". This may take a while...");
         grunt.task.run("curl-dir:" + grunt.config("cefConfig"));
+    });
+
+
+
+    // task: icu
+    grunt.registerTask("icu", "Download and setup ICU", function () {
+        var config   = "icu-" + platform + common.arch(),
+            zipSrc   = grunt.config("curl-dir." + config + ".src"),
+            zipName  = path.basename(zipSrc),
+            zipDest  = path.resolve(process.cwd(), path.join(grunt.config("curl-dir." + config + ".dest"), zipName)),
+            txtName;
+
+        // extract zip file name and set config property
+        grunt.config("icuZipDest", zipDest);
+        grunt.config("icuZipSrc", zipSrc);
+        grunt.config("icuZipName", zipName);
+        grunt.config("icuConfig", config);
+
+        // remove .zip extension
+        txtName = zipName.substr(0, zipName.lastIndexOf(".")) + ".txt";
+
+        // optionally download if ICU is not found
+        if (!grunt.file.exists("deps/icu/" + txtName)) {
+            var icuTasks = ["icu-clean", "icu-extract"];
+
+            if (grunt.file.exists(zipDest)) {
+                grunt.verbose.writeln("Found ICU download " + zipDest);
+            } else {
+                icuTasks.unshift("icu-download");
+            }
+
+            grunt.task.run(icuTasks);
+        } else {
+            grunt.verbose.writeln("Skipping ICU download. Found deps/icu/" + txtName);
+        }
+    });
+
+    // task: icu-clean
+    grunt.registerTask("icu-clean", "Removes CEF binaries and linked folders", function () {
+        // delete dev symlinks from "setup_for_hacking"
+        common.deleteFile("Release/dev", { force: true });
+        common.deleteFile("Debug/dev", { force: true });
+
+        // finally delete ICU binary\
+        common.deleteFile("deps/icu", { force: true });
+    });
+    
+    // task: icu-download
+    grunt.registerTask("icu-download", "Download ICU, see curl-dir config in Gruntfile.js", function () {
+        // requires download-icu to set "icuZipName" in config
+        grunt.task.requires(["icu"]);
+
+        // run curl
+        grunt.log.writeln("Downloading " + grunt.config("icuZipSrc") + ". This may take a while...");
+        grunt.task.run("curl-dir:" + grunt.config("icuConfig"));
+    });
+
+    // task: vs-crt
+    grunt.registerTask("vs-crt", "Download and setup VS CRT dlls", function () {
+        if (platform === "win") {
+            var config   = "vs-crt-" + platform + common.arch(),
+                zipSrc   = grunt.config("curl-dir." + config + ".src"),
+                zipName  = path.basename(zipSrc),
+                zipDest  = path.resolve(process.cwd(), path.join(grunt.config("curl-dir." + config + ".dest"), zipName)),
+                txtName;
+
+            // extract zip file name and set config property
+            grunt.config("vsCRTZipDest", zipDest);
+            grunt.config("vsCRTZipSrc", zipSrc);
+            grunt.config("vsCRTZipName", zipName);
+            grunt.config("vsCRTConfig", config);
+
+            // remove .zip extension
+            txtName = zipName.substr(0, zipName.lastIndexOf(".")) + ".txt";
+
+            // optionally download if vs-crt is not found
+            if (!grunt.file.exists("deps/vs-crt/" + txtName)) {
+                var vsCRTTasks = ["vs-crt-clean", "vs-crt-extract"];
+
+                if (grunt.file.exists(zipDest)) {
+                    grunt.verbose.writeln("Found VS CRT download " + zipDest);
+                } else {
+                    vsCRTTasks.unshift("vs-crt-download");
+                }
+
+                grunt.task.run(vsCRTTasks);
+            } else {
+                grunt.verbose.writeln("Skipping vs-crt download. Found deps/vs-crt/" + txtName);
+            }
+        }
+    });
+
+    // task: vs-crt-clean
+    grunt.registerTask("vs-crt-clean", "Removes CEF binaries and linked folders", function () {
+        // delete dev symlinks from "setup_for_hacking"
+        common.deleteFile("Release/dev", { force: true });
+        common.deleteFile("Debug/dev", { force: true });
+
+        // finally delete vs-crt binary\
+        common.deleteFile("deps/vs-crt", { force: true });
+    });
+    
+    // task: vs-crt-download
+    grunt.registerTask("vs-crt-download", "Download vs crt, see curl-dir config in Gruntfile.js", function () {
+        // requires download-vs-crt to set "vsCRTZipName" in config
+        grunt.task.requires(["vs-crt"]);
+
+        // run curl
+        grunt.log.writeln("Downloading " + grunt.config("vsCRTZipSrc") + ". This may take a while...");
+        grunt.task.run("curl-dir:" + grunt.config("vsCRTConfig"));
     });
 
     function cefFileLocation() {
@@ -276,8 +382,7 @@ module.exports = function (grunt) {
             return rename("deps/" + zipName, "deps/cef");
         }).then(function () {
             var memo = path.resolve(process.cwd(), "deps/cef/" + zipName + ".txt"),
-                permissionsPromise,
-                defer = q.defer();
+                permissionsPromise;
 
             if (platform === "mac") {
                 // FIXME figure out how to use fs.chmod to only do additive mode u+x
@@ -285,6 +390,85 @@ module.exports = function (grunt) {
             } else {
                 permissionsPromise = q.resolve();
             }
+
+            return permissionsPromise.then(function () {
+                // write empty file with zip file
+                grunt.file.write(memo, "");
+
+                return q.resolve();
+            });
+        }).then(function () {
+            done();
+        }, function (err) {
+            grunt.log.writeln(err);
+            done(false);
+        });
+    });
+
+
+    // task: icu-extract
+    grunt.registerTask("icu-extract", "Extract ICU zip", function () {
+        // requires icu to set "icuZipName" in config
+        grunt.task.requires(["icu"]);
+
+        var done    = this.async(),
+            zipDest = grunt.config("icuZipDest"),
+            zipName = grunt.config("icuZipName"),
+            unzipPromise;
+
+        // unzip to deps/
+        unzipPromise = unzip(zipDest, "deps");
+
+        // remove .zip ext
+        zipName = path.basename(zipName, ".zip");
+
+        unzipPromise.then(function () {
+            // rename version stamped name to cef
+            return rename("deps/" + zipName, "deps/icu");
+        }).then(function () {
+            var memo = path.resolve(process.cwd(), "deps/icu/" + zipName + ".txt"),
+                permissionsPromise;
+            
+            permissionsPromise = q.resolve();
+
+            return permissionsPromise.then(function () {
+                // write empty file with zip file
+                grunt.file.write(memo, "");
+
+                return q.resolve();
+            });
+        }).then(function () {
+            done();
+        }, function (err) {
+            grunt.log.writeln(err);
+            done(false);
+        });
+    });
+
+    // task: vs-crt-extract
+    grunt.registerTask("vs-crt-extract", "Extract vs-crt zip", function () {
+        // requires vs-crt to set "vsCRTZipName" in config
+        grunt.task.requires(["vs-crt"]);
+
+        var done    = this.async(),
+            zipDest = grunt.config("vsCRTZipDest"),
+            zipName = grunt.config("vsCRTZipName"),
+            unzipPromise;
+
+        // unzip to deps/
+        unzipPromise = unzip(zipDest, "deps");
+
+        // remove .zip ext
+        zipName = path.basename(zipName, ".zip");
+
+        unzipPromise.then(function () {
+            // rename version stamped name to cef
+            return rename("deps/" + zipName, "deps/vs-crt");
+        }).then(function () {
+            var memo = path.resolve(process.cwd(), "deps/vs-crt/" + zipName + ".txt"),
+                permissionsPromise;
+            
+            permissionsPromise = q.resolve();
 
             return permissionsPromise.then(function () {
                 // write empty file with zip file
@@ -334,7 +518,6 @@ module.exports = function (grunt) {
             curlTask    = "curl-dir:" + config,
             setupTask   = "node-" + platform,
             nodeVersion = grunt.config("node.version"),
-            npmVersion  = grunt.config("npm.version"),
             txtName     = "version-" + nodeVersion + ".txt",
             missingDest = false;
 
@@ -365,6 +548,40 @@ module.exports = function (grunt) {
         }
     });
 
+    grunt.registerTask("node-check", function() {
+        var done = this.async(),
+            promise,
+            systemNodeCheck,
+            bundledNodeCheck,
+            bundledNodeLocation,
+            bundledNodeVersion,
+            systemNodeVersion;
+
+        if (platform === "win") {
+            bundledNodeLocation = path.join("deps", "node", "node.exe");
+        }
+        else {
+            bundledNodeLocation = path.join("deps", "node", "bin", "Brackets-node");
+        }
+        
+
+        bundledNodeCheck = exec(bundledNodeLocation + " -v");
+
+        bundledNodeCheck.then(function (bundleNodeCmdStdout) {
+            bundledNodeVersion = bundleNodeCmdStdout[0];
+        }).then(function() {
+            systemNodeCheck = exec("node -v");
+            return systemNodeCheck;
+        })
+        .then(function(systemNodeCmdStdout) {
+            systemNodeVersion = systemNodeCmdStdout[0];
+            return systemNodeVersion === bundledNodeVersion ? done() : done(false);
+        }, function (err) {
+            grunt.log.error(err);
+            done(false);
+        });
+    });
+
     function nodeWriteVersion() {
         // write empty file with node-version name
         grunt.file.write("deps/node/version-" + grunt.config("node.version") + ".txt", "");
@@ -375,24 +592,15 @@ module.exports = function (grunt) {
         // requires node to set "nodeSrc" in config
         grunt.task.requires(["node"]);
 
-        var done        = this.async(),
-            nodeDest    = grunt.config("nodeDest"),
-            exeFile     = nodeDest[0],
-            npmFile     = nodeDest[1];
+        var nodeDest    = grunt.config("nodeDest"),
+            exeFile     = nodeDest;
 
         grunt.file.mkdir("deps/node");
 
         // copy node.exe to Brackets-node
         grunt.file.copy(exeFile,  "deps/node/node.exe");
 
-        // unzip NPM
-        unzip(npmFile, "deps/node").then(function () {
-            nodeWriteVersion();
-            done();
-        }, function (err) {
-            grunt.log.error(err);
-            done(false);
-        });
+        nodeWriteVersion();
     });
 
     // task: node-mac
@@ -444,7 +652,7 @@ module.exports = function (grunt) {
             gypCommand;
 
         if (platform === "linux") {
-            gypCommand = "bash -c 'python2 gyp/gyp --depth=.'";
+            gypCommand = "bash -c 'gyp/gyp --depth=.'";
         } else {
             gypCommand = "bash -c 'gyp/gyp appshell.gyp -I common.gypi --depth=.'";
         }
@@ -475,5 +683,9 @@ module.exports = function (grunt) {
     });
 
     // task: setup
-    grunt.registerTask("setup", ["cef", "node", "create-project"]);
+    if (platform === "win") {
+        grunt.registerTask("setup", ["cef", "node", "node-check", "icu", "vs-crt", "create-project"]);
+    } else {
+        grunt.registerTask("setup", ["cef", "node", "node-check", "icu", "create-project"]);
+    }
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
+ * Copyright (c) 2013 - present Adobe Systems Incorporated. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -20,15 +20,14 @@
  * DEALINGS IN THE SOFTWARE.
  *
  */
-/*jslint regexp:true*/
-/*global module, require, process*/
-module.exports = function (grunt) {
-    "use strict";
 
+"use strict";
+
+module.exports = function (grunt) {
     var common  = require("./tasks/common")(grunt),
-        resolve = common.resolve,
         platform = common.platform(),
-        staging;
+        staging,
+        cef_version = "3.2623.1402";
 
     if (platform === "mac") {
         staging = "installer/mac/staging/<%= build.name %>.app/Contents";
@@ -36,6 +35,12 @@ module.exports = function (grunt) {
         staging = "installer/win/staging";
     } else {
         staging = "installer/linux/debian/package-root/opt/brackets";
+    }
+
+    if (platform === "mac") {
+        cef_version = "3.2704.1434";
+    } else if (platform === "linux") {
+        cef_version = "3.2785.1487";
     }
 
     grunt.initConfig({
@@ -60,10 +65,18 @@ module.exports = function (grunt) {
                 "dest"      : "<%= downloads %>",
                 "src"       : "http://nodejs.org/dist/v<%= node.version %>/node-v<%= node.version %>-linux-x64.tar.gz"
             },
+            "icu-linux32": {
+                "dest"      : "<%= downloads %>",
+                "src"       : "<%= icu.url %>/icu_<%= icu.version %>_linux32_release.zip"
+            },
+            "icu-linux64": {
+                "dest"      : "<%= downloads %>",
+                "src"       : "<%= icu.url %>/icu_<%= icu.version %>_linux64_release.zip"
+            },
             /* mac */
             "cef-mac": {
                 "dest"      : "<%= downloads %>",
-                "src"       : "<%= cef.url %>/cef_binary_<%= cef.version %>_macosx32.zip"
+                "src"       : "<%= cef.url %>/cef_binary_<%= cef.version %>_macosx64.zip"
             },
             "cef-mac-symbols": {
                 "src"  : "<%= cef.url %>/cef_binary_<%= cef.version %>_macosx32_release_symbols.zip",
@@ -71,7 +84,11 @@ module.exports = function (grunt) {
             },
             "node-mac": {
                 "dest"      : "<%= downloads %>",
-                "src"       : "http://nodejs.org/dist/v<%= node.version %>/node-v<%= node.version %>-darwin-x86.tar.gz"
+                "src"       : "http://nodejs.org/dist/v<%= node.version %>/node-v<%= node.version %>-darwin-x64.tar.gz"
+            },
+            "icu-mac": {
+                "dest"      :  "<%= downloads %>",
+                "src"       :  "<%= icu.url %>/icu_<%= icu.version %>_macosx64.zip"
             },
             /* win */
             "cef-win": {
@@ -84,8 +101,15 @@ module.exports = function (grunt) {
             },
             "node-win": {
                 "dest"      : "<%= downloads %>",
-                "src"       : ["http://nodejs.org/dist/v<%= node.version %>/node.exe",
-                               "http://nodejs.org/dist/npm/npm-<%= npm.version %>.zip"]
+                "src"       : "http://nodejs.org/dist/v<%= node.version %>/win-x86/node.exe"
+            },
+            "icu-win": {
+                "dest"      :  "<%= downloads %>",
+                "src"       :  "<%= icu.url %>/icu_<%= icu.version %>_windows32.zip"
+            },
+            "vs-crt-win": {
+                "dest"      :  "<%= downloads %>",
+                "src"       :  "<%= vsCrt.url %>/vs<%= vsCrt.version %>-crt-ia32.zip"
             }
         },
         "clean": {
@@ -114,9 +138,72 @@ module.exports = function (grunt) {
                             "cef_200_percent.pak",
                             "devtools_resources.pak",
                             "icudtl.dat",
-                            "libcef.dll"
+                            "libcef.dll",
+                            "icuuc58.dll",
+                            "icuin58.dll",
+                            "icudt58.dll",
+                            "api-ms-win-core-console-l1-1-0.dll",
+                            "api-ms-win-core-handle-l1-1-0.dll",
+                            "api-ms-win-core-processenvironment-l1-1-0.dll",
+                            "api-ms-win-core-synch-l1-2-0.dll",
+                            "api-ms-win-crt-filesystem-l1-1-0.dll",
+                            "api-ms-win-crt-runtime-l1-1-0.dll",
+                            "vccorlib140.dll",
+                            "api-ms-win-core-datetime-l1-1-0.dll",
+                            "api-ms-win-core-heap-l1-1-0.dll",
+                            "api-ms-win-core-processthreads-l1-1-0.dll",
+                            "api-ms-win-core-sysinfo-l1-1-0.dll",
+                            "api-ms-win-crt-heap-l1-1-0.dll",
+                            "api-ms-win-crt-stdio-l1-1-0.dll",
+                            "vcruntime140.dll",
+                            "api-ms-win-core-debug-l1-1-0.dll",
+                            "api-ms-win-core-interlocked-l1-1-0.dll",
+                            "api-ms-win-core-processthreads-l1-1-1.dll",
+                            "api-ms-win-core-timezone-l1-1-0.dll",
+                            "api-ms-win-crt-locale-l1-1-0.dll",
+                            "api-ms-win-crt-string-l1-1-0.dll",
+                            "api-ms-win-core-errorhandling-l1-1-0.dll",
+                            "api-ms-win-core-libraryloader-l1-1-0.dll",
+                            "api-ms-win-core-profile-l1-1-0.dll",
+                            "api-ms-win-core-util-l1-1-0.dll",
+                            "api-ms-win-crt-math-l1-1-0.dll",
+                            "api-ms-win-crt-time-l1-1-0.dll",
+                            "api-ms-win-core-file-l1-1-0.dll",
+                            "api-ms-win-core-localization-l1-2-0.dll",
+                            "api-ms-win-core-rtlsupport-l1-1-0.dll",
+                            "api-ms-win-crt-conio-l1-1-0.dll",
+                            "api-ms-win-crt-multibyte-l1-1-0.dll",
+                            "api-ms-win-crt-utility-l1-1-0.dll",
+                            "api-ms-win-core-file-l1-2-0.dll",
+                            "api-ms-win-core-memory-l1-1-0.dll",
+                            "api-ms-win-core-string-l1-1-0.dll",
+                            "api-ms-win-crt-convert-l1-1-0.dll",
+                            "api-ms-win-crt-private-l1-1-0.dll",
+                            "msvcp140.dll",
+                            "api-ms-win-core-file-l2-1-0.dll",
+                            "api-ms-win-core-namedpipe-l1-1-0.dll",
+                            "api-ms-win-core-synch-l1-1-0.dll",
+                            "api-ms-win-crt-environment-l1-1-0.dll",
+                            "api-ms-win-crt-process-l1-1-0.dll",
+                            "ucrtbase.dll",
+                            "natives_blob.bin",
+                            "snapshot_blob.bin",
+                            "command/**"
                         ],
                         "dest"      : "installer/win/staging/"
+                    }
+                ]
+            },
+            "winInstallerDLLs": {
+                "files": [
+                    {
+                        "flatten"   : true,
+                        "expand"    : true,
+                        "src"       : [
+                            "installer/win/LaunchBrackets/LaunchBrackets/bin/Release/LaunchBrackets.CA.dll",
+                            "installer/win/BracketsConfigurator/BracketsConfigurator/bin/Release/BracketsConfigurator.CA.dll"
+                        ],
+                        "dest"      : "installer/win/"
                     }
                 ]
             },
@@ -161,6 +248,16 @@ module.exports = function (grunt) {
                             "appshell*.png",
                             "Brackets",
                             "Brackets-node",
+                            "cef.pak",
+                            "cef_100_percent.pak",
+                            "cef_200_percent.pak",
+                            "devtools_resources.pak",
+                            "cef_extensions.pak",
+                            "icudtl.dat",
+                            "libcef.so",
+                            "natives_blob.bin",
+                            "snapshot_blob.bin",
+                            "chrome-sandbox",
                         ],
                         "dest"      : "<%= build.staging %>"
                     },
@@ -202,12 +299,20 @@ module.exports = function (grunt) {
             "cef": {
                 "src"       : "<%= cef_zip %>",
                 "dest"      : "deps/cef"
+            },
+            "icu": {
+                "src"       : "<%= icu_zip %>",
+                "dest"      : "deps/icu"
             }
         },
-        "jshint": {
-            "all"           : ["Gruntfile.js", "tasks/**/*.js"],
+        "eslint": {
+            "all"           : [
+                "Gruntfile.js",
+                "tasks/**/*.js",
+                "appshell/node-core/*.js"
+            ],
             "options": {
-                "jshintrc"  : ".jshintrc"
+                "quiet"     : true
             }
         },
         "build": {
@@ -226,18 +331,23 @@ module.exports = function (grunt) {
         },
         "cef": {
             "url"           : "http://s3.amazonaws.com/files.brackets.io/cef",
-            "version"       : "3.2171.1902"
+            "version"       : cef_version
         },
         "node": {
-            "version"       : "0.10.24"
+            "version"       : "6.14.0"
         },
-        "npm": {
-            "version"       : "1.2.11"
-        }
+        "icu": {
+            "url"           : "http://s3.amazonaws.com/files.brackets.io/icu",
+            "version"       : "58"
+        },
+        "vsCrt": {
+            "url"           : "http://s3.amazonaws.com/files.brackets.io/vs-crt",
+            "version"       : "2015"
+        },
     });
 
     grunt.loadTasks("tasks");
-    grunt.loadNpmTasks("grunt-contrib-jshint");
+    grunt.loadNpmTasks("grunt-eslint");
     grunt.loadNpmTasks("grunt-contrib-copy");
     grunt.loadNpmTasks("grunt-contrib-clean");
     grunt.loadNpmTasks("grunt-curl");

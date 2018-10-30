@@ -1,24 +1,24 @@
 /*
- * Copyright (c) 2012 Adobe Systems Incorporated. All rights reserved.
- *  
+ * Copyright (c) 2012 - present Adobe Systems Incorporated. All rights reserved.
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"), 
- * to deal in the Software without restriction, including without limitation 
- * the rights to use, copy, modify, merge, publish, distribute, sublicense, 
- * and/or sell copies of the Software, and to permit persons to whom the 
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
  * Software is furnished to do so, subject to the following conditions:
- *  
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- *  
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- * 
+ *
  */
 
 // This is the JavaScript code for bridging to native functionality
@@ -27,10 +27,7 @@
 // Note: All file native file i/o functions are synchronous, but are exposed
 // here as asynchronous calls. 
 
-/*jslint vars: true, plusplus: true, devel: true, browser: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true */
-/*global define, native */
-
-var appshell;
+var appshell, brackets;
 if (!appshell) {
     appshell = {};
 }
@@ -39,6 +36,11 @@ if (!appshell.fs) {
 }
 if (!appshell.app) {
     appshell.app = {};
+}
+
+// Alias the appshell object to brackets. This is temporary and should be removed.
+if (!brackets) {
+    brackets = appshell;
 }
 (function () {
     // Error values. These MUST be in sync with the error values
@@ -73,6 +75,21 @@ if (!appshell.app) {
      * @constant An unsupported encoding value was specified.
      */
     appshell.fs.ERR_UNSUPPORTED_ENCODING    = 5;
+
+    /**
+     * @constant File could not be encoded.
+     */
+    appshell.fs.ERR_ENCODE_FILE_FAILED      = 18;
+
+    /**
+     * @constant File could not be decoded.
+     */
+    appshell.fs.ERR_DECODE_FILE_FAILED      = 19;
+
+    /**
+     * @constant File was encoded with utf-16
+     */
+    appshell.fs.ERR_UNSUPPORTED_UTF16_ENCODING      = 20;
     
     /**
      * @constant File could not be written.
@@ -103,7 +120,37 @@ if (!appshell.app) {
      * @constant The required browser is not installed
      */
     appshell.fs.ERR_BROWSER_NOT_INSTALLED   = 11;
+ 
+    /**
+     * @constant User cancelled the password dialog while installing command line tools.
+     */
+    appshell.app.ERR_CL_TOOLS_CANCELLED     = 12;
+    
+    /**
+     * @constant Removing and existing sysmlink failed
+     */
+    appshell.app.ERR_CL_TOOLS_RMFAILED      = 13;
+    
+    /**
+     * @constant Directory, into which symlink needs to be copied, creation failed
+     */
+    appshell.app.ERR_CL_TOOLS_MKDIRFAILED   = 14;
+    
+    /**
+     * @constant Symlink creation failed
+     */
+    appshell.app.ERR_CL_TOOLS_SYMLINKFAILED = 15;
+    
+    /**
+     * @constant Brackets could not create an Authorization object
+     */
+    appshell.app.ERR_CL_TOOLS_SERVFAILED    = 16;
 
+    /**
+    * @constant Command Line Installation not supported on the specific platform
+    */
+    appshell.app.ERR_CL_TOOLS_NOTSUPPORTED  = 17;
+ 
     /**
      * @constant No error.
      */
@@ -284,8 +331,50 @@ if (!appshell.app) {
         }, path);
     };
  
- 
- 
+    /**
+     * Reads the contents of a directory and reports contents along with stats. 
+     *
+     * @param {string} path The path of the directory to read.
+     * @param {function(err, files)} callback Asynchronous callback function. The callback gets three arguments 
+     *        (err, files, stats) where files is an array of the names of the files
+     *        in the directory excluding '.' and '..'  and stats is an array of all stats of the files.
+     *        Possible error values:
+     *          NO_ERROR
+     *          ERR_UNKNOWN
+     *          ERR_INVALID_PARAMS
+     *          ERR_NOT_FOUND
+     *          ERR_CANT_READ
+     *                 
+     * @return None. This is an asynchronous call that sends all return information to the callback.
+     */ 
+    // Test dictionary
+    native function ReadDirWithStats();
+    appshell.fs.readDirWithStats = function (path, callback){
+
+        ReadDirWithStats(function (err, allPaths){
+            if (callback) {
+                var finalArray  = [];
+                var allContents = allPaths[0];
+                var allStats    = allPaths[1];
+
+                allStats.forEach(function (val, idx) {
+                    finalArray[idx] = {
+                        isFile: function () {
+                            return !val[1];
+                        },
+                        isDirectory: function () {
+                            return val[1];
+                        },
+                        mtime: new Date(val[0] * 1000), // modtime is seconds since 1970, convert to ms
+                        size: new Number(val[2]),
+                        realPath: val[3] ? val[3] : null
+                    }
+                });
+                callback(err, allContents, finalArray);
+            }
+        }, path);
+    };
+
     /**
      * Quits native shell application
      */
@@ -367,8 +456,8 @@ if (!appshell.app) {
      * @return None. This is an asynchronous call that sends all return information to the callback.
      */
     native function WriteFile();
-    appshell.fs.writeFile = function (path, data, encoding, callback) {
-        WriteFile(callback || _dummyCallback, path, data, encoding);
+    appshell.fs.writeFile = function (path, data, encoding, preserveBOM, callback) {
+        WriteFile(callback || _dummyCallback, path, data, encoding, preserveBOM);
     };
     
     /**
@@ -554,7 +643,20 @@ if (!appshell.app) {
     appshell.app.getRemoteDebuggingPort = function () {
         return GetRemoteDebuggingPort();
     };
- 
+    
+    
+    /**
+     * Set the parameters for auto update, to be used by installer on Win/Update Script on Mac as command line arguments.
+     *
+     * @param {string} updateInfoObj - update info json object
+     * @param {function(err)=} callback Asynchronous callback function. 
+     * @return None. 
+     */
+    native function SetUpdateParams();
+    appshell.app.setUpdateParams = function (updateInfoObj, callback) {
+        SetUpdateParams(callback || _dummyCallback, updateInfoObj);
+    }
+
     /**
      * Set menu enabled/checked state.
      * @param {string} command ID of the menu item.
@@ -829,7 +931,31 @@ if (!appshell.app) {
     appshell.app.setZoomLevel = function (zoomLevel, callback) {
         SetZoomLevel(callback || _dummyCallback, zoomLevel);
     };
- 
-    // Alias the appshell object to brackets. This is temporary and should be removed.
-    brackets = appshell;
+
+    /**
+     * Install command line scripts to make Brackets launchable from command line.
+     * Right now usage is restricted to MAC only.
+     *
+     * @param {number}
+     *
+     * @return none.
+     */
+     native function InstallCommandLineTools();
+     appshell.app.installCommandLine = function (callback) {
+        InstallCommandLineTools(callback);
+     };
+
+     /**
+      * Get hash of the machine based on various parameters like
+      * network interfaces, CPU ID, volume serial number e.t.c
+      *
+      * @param {none}
+      *
+      * @return None. This is an asynchronous call that sends all return information to the callback.
+      */
+     native function GetMachineHash();
+     appshell.app.getMachineHash = function (callback) {
+         GetMachineHash(callback || _dummyCallback);
+     };
+    
 })();

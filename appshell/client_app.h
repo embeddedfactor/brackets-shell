@@ -87,13 +87,6 @@ class ClientApp : public CefApp,
       callback_map_[id] = std::make_pair(context, callbackFunction);
   }
 
-  // Platform-specific methods implemented in client_app_mac/client_app_win
-  double GetElapsedMilliseconds();
-  CefString GetCurrentLanguage();
-  std::string GetExtensionJSSource();
-  static CefString AppGetSupportDirectory();
-  static CefString AppGetDocumentsDirectory();
-
 private:
   // Creates all of the RenderDelegate objects. Implemented in
   // client_app_delegates.
@@ -109,6 +102,15 @@ private:
   }
   virtual CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler()
       OVERRIDE { return this; }
+  
+  virtual CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler()
+	  OVERRIDE { return this; }
+  virtual void OnBeforeCommandLineProcessing(
+	  const CefString& process_type,
+	  CefRefPtr<CefCommandLine> command_line);
+
+  virtual void OnBeforeChildProcessLaunch(
+	  CefRefPtr<CefCommandLine> command_line);
 
   // CefRenderProcessHandler methods.
   virtual void OnWebKitInitialized() OVERRIDE;

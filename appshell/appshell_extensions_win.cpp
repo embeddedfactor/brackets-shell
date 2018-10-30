@@ -1,29 +1,30 @@
 /*
- * Copyright (c) 2012 Adobe Systems Incorporated. All rights reserved.
- *  
+ * Copyright (c) 2012 - present Adobe Systems Incorporated. All rights reserved.
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"), 
- * to deal in the Software without restriction, including without limitation 
- * the rights to use, copy, modify, merge, publish, distribute, sublicense, 
- * and/or sell copies of the Software, and to permit persons to whom the 
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
  * Software is furnished to do so, subject to the following conditions:
- *  
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- *  
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
- * 
- */ 
+ *
+ */
 
-#include "appshell_extensions.h"
+#include "appshell_extensions_platform.h"
+
+#include "appshell/appshell_helpers.h"
 #include "native_menu_model.h"
-#include "client_handler.h"
 
 #include <algorithm>
 #include <CommDlg.h>
@@ -34,11 +35,18 @@
 #include <Shobjidl.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <windows.h>
+#include <intrin.h>
+#include <iphlpapi.h>
+
 #include "config.h"
+#include <codecvt>
 #define CLOSING_PROP L"CLOSING"
 #define UNICODE_MINUS 0x2212
 #define UNICODE_LEFT_ARROW 0x2190
 #define UNICODE_DOWN_ARROW 0x2193
+
+#define UTF8_BOM "\xEF\xBB\xBF"
 
 // Forward declarations for functions at the bottom of this file
 void ConvertToNativePath(ExtensionString& filename);
@@ -337,11 +345,11 @@ int32 OpenLiveBrowser(ExtensionString argURL, bool enableRemoteDebugging)
     std::wstring args = appPath;
 
     if (enableRemoteDebugging) {
-        std::wstring profilePath(ClientApp::AppGetSupportDirectory());
+        std::wstring profilePath(appshell::AppGetSupportDirectory());
         profilePath += L"\\live-dev-profile";
         args += L" --user-data-dir=\"";
         args += profilePath;
-        args += L"\" --no-first-run --no-default-browser-check --allow-file-access-from-files --remote-debugging-port=9222 ";
+        args += L"\" --disk-cache-size=250000000 --no-first-run --no-default-browser-check --disable-default-apps --allow-file-access-from-files --remote-debugging-port=9222 ";
     } else {
         args += L" ";
     }
@@ -349,15 +357,16 @@ int32 OpenLiveBrowser(ExtensionString argURL, bool enableRemoteDebugging)
 
     // Args must be mutable
     int argsBufSize = args.length() +1;
-    std::auto_ptr<WCHAR> argsBuf( new WCHAR[argsBufSize]);
-    wcscpy(argsBuf.get(), args.c_str());
+    std::vector<WCHAR> argsBuf;
+    argsBuf.resize(argsBufSize);
+    wcscpy(&argsBuf[0], args.c_str());
 
     STARTUPINFO si = {0};
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi = {0};
 
     // Launch cmd.exe and pass in the arguments
-    if (!CreateProcess(NULL, argsBuf.get(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+    if (!CreateProcess(NULL, &argsBuf[0], NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
         return ConvertWinErrorCode(GetLastError());
     }
         
@@ -421,66 +430,35 @@ int32 ShowOpenDialog(bool allowMultipleSelection,
     ConvertToNativePath(initialDirectory);
 
     if (chooseDirectory) {
-        // check current OS version
-        OSVERSIONINFO osvi;
-        memset(&osvi, 0, sizeof(OSVERSIONINFO));
-        osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-        if (GetVersionEx(&osvi) && (osvi.dwMajorVersion >= 6)) {
-            // for Vista or later, use the MSDN-preferred implementation of the Open File dialog in pick folders mode
-            IFileDialog *pfd;
-            if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)))) {
-                // configure the dialog to Select Folders only
-                DWORD dwOptions;
-                if (SUCCEEDED(pfd->GetOptions(&dwOptions))) {
-                    pfd->SetOptions(dwOptions | FOS_PICKFOLDERS | FOS_DONTADDTORECENT);
-                    IShellItem *shellItem = NULL;
-                    if (SUCCEEDED(SHCreateItemFromParsingName(initialDirectory.c_str(), 0, IID_IShellItem, reinterpret_cast<void**>(&shellItem))))
-                        pfd->SetFolder(shellItem);
-                    pfd->SetTitle(title.c_str());
-                    if (SUCCEEDED(pfd->Show(GetActiveWindow()))) {
-                        IShellItem *psi;
-                        if (SUCCEEDED(pfd->GetResult(&psi))) {
-                            LPWSTR lpwszName = NULL;
-                            if(SUCCEEDED(psi->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, (LPWSTR*)&lpwszName))) {
-                                // Add directory path to the result
-                                std::wstring wstrName(lpwszName);
-                                ExtensionString pathName(wstrName);
-                                ConvertToUnixPath(pathName);
-                                selectedFiles->SetString(0, pathName);
-                                ::CoTaskMemFree(lpwszName);
-                            }
-                            psi->Release();
+        IFileDialog *pfd;
+        if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)))) {
+            // configure the dialog to Select Folders only
+            DWORD dwOptions;
+            if (SUCCEEDED(pfd->GetOptions(&dwOptions))) {
+                pfd->SetOptions(dwOptions | FOS_PICKFOLDERS | FOS_DONTADDTORECENT);
+                IShellItem *shellItem = NULL;
+                if (SUCCEEDED(SHCreateItemFromParsingName(initialDirectory.c_str(), 0, IID_IShellItem, reinterpret_cast<void**>(&shellItem))))
+                    pfd->SetFolder(shellItem);
+                pfd->SetTitle(title.c_str());
+                if (SUCCEEDED(pfd->Show(GetActiveWindow()))) {
+                    IShellItem *psi;
+                    if (SUCCEEDED(pfd->GetResult(&psi))) {
+                        LPWSTR lpwszName = NULL;
+                        if(SUCCEEDED(psi->GetDisplayName(SIGDN_DESKTOPABSOLUTEPARSING, (LPWSTR*)&lpwszName))) {
+                            // Add directory path to the result
+                            std::wstring wstrName(lpwszName);
+                            ExtensionString pathName(wstrName);
+                            ConvertToUnixPath(pathName);
+                            selectedFiles->SetString(0, pathName);
+                            ::CoTaskMemFree(lpwszName);
                         }
+                        psi->Release();
                     }
-                    if (shellItem != NULL)
-                        shellItem->Release();
                 }
-                pfd->Release();
+                if (shellItem != NULL)
+                    shellItem->Release();
             }
-        } else {
-            // for XP, use the old-styled SHBrowseForFolder() implementation
-            BROWSEINFO bi = {0};
-            bi.hwndOwner = GetActiveWindow();
-            bi.lpszTitle = title.c_str();
-            bi.ulFlags = BIF_NEWDIALOGSTYLE | BIF_EDITBOX;
-            bi.lpfn = SetInitialPathCallback;
-            bi.lParam = (LPARAM)initialDirectory.c_str();
-
-            LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
-            if (pidl != 0) {
-                if (SHGetPathFromIDList(pidl, szFile)) {
-                    // Add directory path to the result
-                    ExtensionString pathName(szFile);
-                    ConvertToUnixPath(pathName);
-                    selectedFiles->SetString(0, pathName);
-                }
-                IMalloc* pMalloc = NULL;
-                SHGetMalloc(&pMalloc);
-                if (pMalloc) {
-                    pMalloc->Free(pidl);
-                    pMalloc->Release();
-                }
-            }
+            pfd->Release();
         }
     } else {
         OPENFILENAME ofn;
@@ -728,7 +706,7 @@ int32 GetFileInfo(ExtensionString filename, uint32& modtime, bool& isDir, double
 
 const int BOMLength = 3;
 
-typedef enum CheckedState { CS_UNKNOWN, CS_NO, CS_YES };
+enum CheckedState { CS_UNKNOWN, CS_NO, CS_YES };
 
 typedef struct UTFValidationState {
 
@@ -845,12 +823,101 @@ bool quickTestBufferForUTF8(UTFValidationState& validationState)
     return (GetBufferAsUTF8(validationState));
 }
 
+typedef std::map<std::string, long> CharSetMap;
 
-int32 ReadFile(ExtensionString filename, ExtensionString encoding, std::string& contents)
+// Mapping of CharSet to CodePage
+CharSetMap charSetMap =
 {
-    if (encoding != L"utf8")
-        return ERR_UNSUPPORTED_ENCODING;
+    // Below mappings are listed on website
+    // https://msdn.microsoft.com/en-us/library/windows/desktop/dd317756(v=vs.85).aspx
+    { "ISO-2022-JP", 50220 },
+    { "ISO-2022-CN", 50227 },
+    { "ISO-2022-KR", 50225 },
+    { "GB18030", 54936 },
+    { "BIG5", 950 },
+    { "EUC-JP", 20932 },
+    { "EUC-KR", 949 },
+    { "ISO-8859-1", 28591 },
+    { "ISO-8859-2", 28592 },
+    { "ISO-8859-5", 28595 },
+    { "ISO-8859-6", 28596 },
+    { "ISO-8859-7", 28597 },
+    { "ISO-8859-8", 28598 },
+    { "ISO-8859-9", 28599 },
+    { "WINDOWS-1250", 1250 },
+    { "WINDOWS-1251", 1251 },
+    { "WINDOWS-1252", 1252 },
+    { "WINDOWS-1253", 1253 },
+    { "WINDOWS-1254", 1254 },
+    { "WINDOWS-1255", 1255 },
+    { "WINDOWS-1256", 1256 },
+    { "KOI8-R", 20866 },
+    { "IBM420", 420 },
+    { "IBM424", 424 },
 
+    // These are also supported 
+    { "ISO-8859-8-I", 38598 },
+    { "SHIFT_JIS", 932 },
+    { "ISO-8859-3", 28593 },
+    { "ISO-8859-4", 28594 },
+    { "WINDOWS-1257", 1257 },
+    { "WINDOWS-1258", 1258 },
+    { "GB2312", 936 },
+    { "HZ-GB-2312", 52936 },
+    { "WINDOWS-874", 874 },
+    { "CP866", 866 },
+    { "IBM852", 852 },
+    { "DOS-862", 862 },
+    { "DOS-720", 720 },
+    { "KOI8-RU", 21866 },
+    { "ASMO-708", 708 },
+    { "CP437", 437 },
+    { "CP852", 852 },
+    { "ISO-8859-13", 28603 },
+    { "GBK", 936 },
+    { "ISO-8859-11", 874 },
+    { "ISO-2022-JP", 50220 }
+};
+
+
+static void CharSetToWide(const std::string &aString, long codePage, std::wstring &content)
+{
+    int aUTF16Length = ::MultiByteToWideChar(codePage, // get destination buffer length
+        0,
+        aString.data(),
+        aString.size(),
+        NULL,
+        NULL);
+
+    int resultByteSize = aUTF16Length * sizeof(wchar_t);
+    std::auto_ptr<wchar_t> buf(new wchar_t[resultByteSize]());
+
+    // codePage -> UTF-16
+    int wcharsWritten = ::MultiByteToWideChar(codePage,
+        0,
+        aString.data(),
+        aString.size(),
+        buf.get(),
+        aUTF16Length);
+
+    assert(wcharsWritten == aUTF16Length);
+
+    content.assign(buf.get(), wcharsWritten);
+}
+
+std::wstring StringToWString(const std::string& str)
+{
+    using convert_typeX = std::codecvt_utf8<wchar_t>;
+    std::wstring_convert<convert_typeX, wchar_t> converterX;
+
+    return converterX.from_bytes(str);
+}
+
+int32 ReadFile(ExtensionString filename, ExtensionString& encoding, std::string& contents, bool& preserveBOM)
+{
+    if (encoding == L"utf8") {
+        encoding = L"UTF-8";
+    }
     DWORD dwAttr;
     dwAttr = GetFileAttributes(filename.c_str());
     if (INVALID_FILE_ATTRIBUTES == dwAttr)
@@ -864,107 +931,159 @@ int32 ReadFile(ExtensionString filename, ExtensionString encoding, std::string& 
     int32 error = NO_ERROR;
 
     if (INVALID_HANDLE_VALUE == hFile)
-        return ConvertWinErrorCode(GetLastError()); 
+        return ConvertWinErrorCode(GetLastError());
 
-    char* buffer = NULL;
     DWORD dwFileSize = GetFileSize(hFile, NULL);
 
     if (dwFileSize == 0) {
         contents = "";
     } else {
         DWORD dwBytesRead;
-        
-        // first just read a few bytes of the file
-        //  to check for a binary or text format 
-        //  that we can't handle
-
-        // we just want to read enough to satisfy the
-        //  UTF-16 or UTF-32 test with or without a BOM
-        // the UTF-8 test could result in a false-positive
-        //  but we'll check again with all bits if we 
-        //  think it's UTF-8 based on just a few characters
-        
-        // if we're going to read fewer bytes than our
-        //  quick test then we skip the quick test and just
-        //  do the full test below since it will be fewer reads
-
-        // We need a buffer that can handle UTF16 or UTF32 with or without a BOM 
-        //  but with enough that we can test for true UTF data to test against 
-        //  without reading partial character streams roughly 1000 characters 
-        //  at UTF32 should do it:
-        // 1000 chars + 32-bit BOM (UTF-32) = 4004 bytes 
-        // 1001 chars without BOM  (UTF-32) = 4004 bytes 
-        // 2001 chars + 16 bit BOM (UTF-16) = 4004 bytes 
-        // 2002 chars without BOM  (UTF-16) = 4004 bytes 
-        const DWORD quickTestSize = 4004; 
-        static char quickTestBuffer[quickTestSize+1];
 
         UTFValidationState validationState;
-
-        validationState.data = quickTestBuffer;
-        validationState.dataLen = quickTestSize;
-
-        if (dwFileSize > quickTestSize) {
-            ZeroMemory(quickTestBuffer, sizeof(quickTestBuffer));
-            if (ReadFile(hFile, quickTestBuffer, quickTestSize, &dwBytesRead, NULL)) {
-                if (!quickTestBufferForUTF8(validationState)) {
-                    error = ERR_UNSUPPORTED_ENCODING;
-                }
-                else {
-                    // reset the file pointer back to beginning
-                    //  since we're going to re-read the file wi
-                    SetFilePointer(hFile, 0, NULL, FILE_BEGIN);
-                }
-            }
-        }
 
         if (error == NO_ERROR) {
             // either we did a quick test and we think it's UTF-8 or 
             //  the file is small enough that we didn't spend the time
             //  to do a quick test so alloc the memory to read the entire
             //  file into memory and test it again...
-            buffer = (char*)malloc(dwFileSize);
-            if (buffer) {
+            std::auto_ptr<char> buffer(new char[dwFileSize]());
+            if (buffer.get()) {
 
-                validationState.data = buffer;
+                validationState.data = buffer.get();
                 validationState.dataLen = dwFileSize;
                 validationState.preserveBOM = false;
 
-                if (ReadFile(hFile, buffer, dwFileSize, &dwBytesRead, NULL)) {
-                    if (!GetBufferAsUTF8(validationState)) {
-                        error = ERR_UNSUPPORTED_ENCODING;
-                    } else {
-                        contents = std::string(buffer, validationState.dataLen);
-                    }        
-                } else {
+                if (ReadFile(hFile, buffer.get(), dwFileSize, &dwBytesRead, NULL)) {
+
+                    contents = std::string(buffer.get(), validationState.dataLen);
+                    if (encoding != L"UTF-8"|| !GetBufferAsUTF8(validationState)) {
+                        std::string detectedCharSet;
+                        try {
+                            if (encoding == L"UTF-8") {
+                                CharSetDetect ICUDetector;
+                                ICUDetector(contents.c_str(), contents.size(), detectedCharSet);
+                            }
+                            else {
+                                std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+                                detectedCharSet = conv.to_bytes(encoding);
+                            }
+                            if (detectedCharSet == "UTF-16LE" || detectedCharSet == "UTF-16BE") {
+				 CloseHandle(hFile);
+                                return ERR_UNSUPPORTED_UTF16_ENCODING;
+                            }
+                            std::transform(detectedCharSet.begin(), detectedCharSet.end(), detectedCharSet.begin(), ::toupper);
+                            CharSetMap::iterator iter = charSetMap.find(detectedCharSet);
+
+                            if (iter == charSetMap.end()) {
+                                error = ERR_UNSUPPORTED_ENCODING;
+                            }
+                            else {
+                                try {
+                                    std::wstring content;
+                                    CharSetToWide(contents, iter->second, content);
+                                    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+                                    contents = conv.to_bytes(content);
+                                    encoding = StringToWString(detectedCharSet);
+                                    error = NO_ERROR;
+                                }
+                                catch (...) {
+                                    error = ERR_DECODE_FILE_FAILED;
+                                }
+                            }
+                        } catch (...) {
+                            error = ERR_UNSUPPORTED_ENCODING;
+                        }
+                    }
+                    if (encoding == L"UTF-8") {
+                        // If file starts with BOM chars, then
+                        // we set preserveBOM to true, so that
+                        // while writing we can preprend the BOM
+                        CheckAndRemoveUTF8BOM(contents, preserveBOM);
+                    }
+                }
+                else {
                     error = ConvertWinErrorCode(GetLastError(), false);
                 }
-                free(buffer);
-
             }
-            else { 
+            else {
                 error = ERR_UNKNOWN;
             }
         }
     }
     CloseHandle(hFile);
-    return error; 
+    return error;
 }
 
-int32 WriteFile(ExtensionString filename, std::string contents, ExtensionString encoding)
+
+static void WideToCharSet(const std::wstring &aUTF16string, long codePage, std::string &contents)
 {
-    if (encoding != L"utf8")
-        return ERR_UNSUPPORTED_ENCODING;
+    contents = "";
+    if (aUTF16string.size() > 0)
+    {
+        // convert UTF-16 to UTF-8; first get destination buffer length
+        int aUTF8Length = ::WideCharToMultiByte(codePage,
+            0,
+            aUTF16string.data(),
+            aUTF16string.size(),
+            NULL,
+            0,
+            NULL,
+            NULL);
+
+        std::auto_ptr<char> buf(new char[aUTF8Length]());
+
+        // UTF-16 -> UTF-8 conversion
+        int bytesWritten = ::WideCharToMultiByte(codePage,
+            0,
+            aUTF16string.data(),
+            aUTF16string.size(),
+            buf.get(),
+            aUTF8Length,
+            NULL,
+            NULL);
+
+        assert(bytesWritten == aUTF8Length);
+
+        contents.assign(buf.get(), bytesWritten);
+    }
+}
+
+
+
+int32 WriteFile(ExtensionString filename, std::string contents, ExtensionString encoding, bool preserveBOM)
+{
+    if (encoding == L"utf8") {
+        encoding = L"UTF-8";
+    }
+    int error = NO_ERROR;
+    if (encoding != L"UTF-8") {
+        std::wstring content = StringToWString(contents);
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+        CharSetMap::iterator iter = charSetMap.find(conv.to_bytes(encoding));
+        if (iter != charSetMap.end()) {
+            WideToCharSet(content, iter->second, contents);
+        }
+        else {
+            error = ERR_ENCODE_FILE_FAILED;
+        }
+    }
+	// We check if the file originally contained BOM chars
+	// if yes, then we prepend BOM chars to file
+	// Currently BOM is supported only for UTF-8
+    if (encoding == L"UTF-8" && preserveBOM) {
+		contents = UTF8_BOM + contents;
+    }
 
     HANDLE hFile = CreateFile(filename.c_str(), GENERIC_WRITE,
         FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     DWORD dwBytesWritten;
-    int error = NO_ERROR;
+    
 
     if (INVALID_HANDLE_VALUE == hFile)
-        return ConvertWinErrorCode(GetLastError(), false); 
+        return ConvertWinErrorCode(GetLastError(), false);
 
-    // TODO (issue 67) -  Should write to temp file and handle encoding
+    // TODO (issue 67) -  Should write to temp file
     if (!WriteFile(hFile, contents.c_str(), contents.length(), &dwBytesWritten, NULL)) {
         error = ConvertWinErrorCode(GetLastError(), false);
     }
@@ -1822,6 +1941,11 @@ int GetMenuItemPosition(HMENU hMenu, UINT commandID)
     return -1;
 }
 
+int32 SetMenuItemState(CefRefPtr<CefBrowser> browser, ExtensionString command, bool& enabled, bool& checked)
+{
+    return NO_ERROR;
+}
+
 int32 SetMenuTitle(CefRefPtr<CefBrowser> browser, ExtensionString command, ExtensionString itemTitle) {
     static WCHAR titleBuf[MAX_LOADSTRING];
 
@@ -2034,6 +2158,129 @@ void DragWindow(CefRefPtr<CefBrowser> browser) {
     HWND browserHwnd = (HWND)getMenuParent(browser);
     SendMessage(browserHwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
 }
-    
 
+// Courtesy: Rafael.
+// https://oroboro.com/unique-machine-fingerprint/
 
+// we just need this for purposes of unique machine id. 
+// So any one or two mac's is fine.
+u16 HasMacAddress(PIP_ADAPTER_INFO info)
+{
+	u16 hash = 0;
+	for (u32 i = 0; i < info->AddressLength; i++)
+	{
+		hash += (info->Address[i] << ((i & 1) * 8));
+	}
+	return hash;
+}
+
+void GetMacHash(u16& mac1, u16& mac2)
+{
+	IP_ADAPTER_INFO adapterInfo[32];
+	DWORD dwBufLen = sizeof(adapterInfo);
+
+	DWORD dwStatus = GetAdaptersInfo(adapterInfo, &dwBufLen);
+	if (dwStatus != ERROR_SUCCESS)
+		return; // no adapters.
+
+	PIP_ADAPTER_INFO pAdapterInfo = adapterInfo;
+	mac1 = HasMacAddress(pAdapterInfo);
+	if (pAdapterInfo->Next)
+		mac2 = HasMacAddress(pAdapterInfo->Next);
+
+	// sort the mac addresses. We don't want to invalidate
+	// both macs if they just change order.
+	if (mac1 > mac2)
+	{
+		u16 tmp = mac2;
+		mac2 = mac1;
+		mac1 = tmp;
+	}
+}
+
+u16 GetVolumeHash()
+{
+	DWORD serialNum = 0;
+	
+	char buffer[1024] = { 0 };
+	GetWindowsDirectoryA(buffer, 1024);
+
+	// Determine if this volume uses an NTFS file system.
+	GetVolumeInformation(NULL, NULL, 0, &serialNum, NULL, NULL, NULL, 0);
+	u16 hash = (u16)((serialNum + (serialNum >> 16)) & 0xFFFF);
+
+	return hash;
+}
+
+u16 GetCPUHash()
+{
+	int cpuinfo[4] = { 0, 0, 0, 0 };
+	__cpuid(cpuinfo, 0);
+	u16 hash = 0;
+	u16* ptr = (u16*)(&cpuinfo[0]);
+	for (u32 i = 0; i < 8; i++)
+		hash += ptr[i];
+
+	return hash;
+}
+
+u16 mask[5] = { 0x4e25, 0xf4a1, 0x5437, 0xab41, 0x0000 };
+
+static void Smear(u16* id)
+{
+	for (u32 i = 0; i < 5; i++)
+		for (u32 j = i; j < 5; j++)
+			if (i != j)
+				id[i] ^= id[j];
+
+	for (u32 i = 0; i < 5; i++)
+		id[i] ^= mask[i];
+}
+
+static u16* ComputeSystemUniqueID()
+{
+	static u16 id[5] = { 0 };
+	static bool computed = false;
+
+	if (computed) return id;
+
+	// produce a number that uniquely identifies this system.
+	id[0] = GetCPUHash();
+	id[1] = GetVolumeHash();
+	GetMacHash(id[2], id[3]);
+
+	// fifth block is some check digits
+	id[4] = 0;
+	for (u32 i = 0; i < 4; i++)
+		id[4] += id[i];
+
+	Smear(id);
+
+	computed = true;
+	return id;
+}
+
+std::string GetSystemUniqueID()
+{
+	// get the name of the computer
+	std::string buf;
+
+	u16* id = ComputeSystemUniqueID();
+	for (u32 i = 0; i < 5; i++)
+	{
+		char num[16];
+		snprintf(num, 16, "%x", id[i]);
+		if (i > 0) {
+			buf = buf + "-";
+		}
+		switch (strlen(num))
+		{
+		case 1: buf = buf + "000"; break;
+		case 2: buf = buf + "00";  break;
+		case 3: buf = buf + "0";   break;
+		}
+		buf = buf + num;
+	}
+	
+	return buf;
+}

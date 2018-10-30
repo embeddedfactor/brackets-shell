@@ -1,13 +1,13 @@
 // Copyright (c) 2011 The Chromium Embedded Framework Authors. All rights
 // reserved. Use of this source code is governed by a BSD-style license that
 // can be found in the LICENSE file.
-#define OS_MAC
 
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #include "client_handler.h"
 #include "include/cef_browser.h"
 #include "include/cef_frame.h"
+#include "include/wrapper/cef_helpers.h"
 #include "cefclient.h"
 #include "native_menu_model.h"
 
@@ -21,6 +21,12 @@
 #include "client_colors_mac.h"
 #import "CustomTitlebarView.h"
 
+// If app is built with 10.9 or lower
+// this constant is not defined.
+#ifndef NSAppKitVersionNumber10_10
+    #define NSAppKitVersionNumber10_10 1343
+#endif
+
 
 extern CefRefPtr<ClientHandler> g_handler;
 
@@ -30,7 +36,7 @@ extern CefRefPtr<ClientHandler> g_handler;
 void ClientHandler::OnAddressChange(CefRefPtr<CefBrowser> browser,
                                     CefRefPtr<CefFrame> frame,
                                     const CefString& url) {
-  REQUIRE_UI_THREAD();
+  CEF_REQUIRE_UI_THREAD();
 
   if (m_BrowserId == browser->GetIdentifier() && frame->IsMain()) {
     // Set the edit window text
@@ -43,16 +49,27 @@ void ClientHandler::OnAddressChange(CefRefPtr<CefBrowser> browser,
 
 void ClientHandler::OnTitleChange(CefRefPtr<CefBrowser> browser,
                                   const CefString& title) {
-  REQUIRE_UI_THREAD();
+  CEF_REQUIRE_UI_THREAD();
 
   // Set the frame window title bar
   NSView* view = (NSView*)browser->GetHost()->GetWindowHandle();
   NSWindow* window = [view window];
   std::string titleStr(title);
   NSString* str = [NSString stringWithUTF8String:titleStr.c_str()];
-  [window setTitle:str];
-    
+  
   NSObject* delegate = [window delegate];
+  if ([window styleMask] & NSFullScreenWindowMask) {
+      [window setTitle:str];
+  }
+    // This is required as we are now managing the window's title
+    // on our own, using CustomTitlbeBarView. As we are nuking the
+    // window's title, currently open windows like new brackets
+    // windows/dev tools are not getting listed under the
+    // 'Window' menu. So we are now explicitly telling OS to make
+    // sure we have a menu entry under 'Window' menu. This is a
+    // safe call and is officially supported.
+  [NSApp changeWindowsItem:window title:str filename:NO];
+
   [delegate performSelectorOnMainThread:@selector(windowTitleDidChange:) withObject:str waitUntilDone:NO];
 }
 
@@ -166,17 +183,23 @@ void ClientHandler::CloseMainWindow() {
   isReallyClosing = true;
 }
 
--(BOOL)isRunningOnYosemite {
-    NSDictionary* dict = [NSDictionary dictionaryWithContentsOfFile:@"/System/Library/CoreServices/SystemVersion.plist"];
-    NSString* version =  [dict objectForKey:@"ProductVersion"];
-    return [version hasPrefix:@"10.10"];
+-(BOOL)isRunningOnYosemiteOrLater {
+    // This seems to be a more reliable way of checking
+    // the MACOS version. Documentation about this available
+    // at the following link.
+    // https://developer.apple.com/library/mac/documentation/DeveloperTools/Conceptual/cross_development/Using/using.html
+
+    if (NSAppKitVersionNumber >= NSAppKitVersionNumber10_10)
+        return true;
+    else
+        return false;
 }
 
 - (BOOL)isFullScreenSupported {
     // Return False on Yosemite so we
     //  don't draw our own full screen button
     //  and handle full screen mode
-    if (![self isRunningOnYosemite]) {
+    if (![self isRunningOnYosemiteOrLater]) {
         SInt32 version;
         Gestalt(gestaltSystemVersion, &version);
         return (version >= 0x1070);
@@ -185,7 +208,7 @@ void ClientHandler::CloseMainWindow() {
 }
 
 -(BOOL)needsFullScreenActivateHack {
-    if (![self isRunningOnYosemite]) {
+    if (![self isRunningOnYosemiteOrLater]) {
         SInt32 version;
         Gestalt(gestaltSystemVersion, &version);
         return (version >= 0x1090);
@@ -194,7 +217,7 @@ void ClientHandler::CloseMainWindow() {
 }
 
 -(BOOL)useSystemTrafficLights {
-    return [self isRunningOnYosemite];
+    return [self isRunningOnYosemiteOrLater];
 }
 
 -(void)setFullScreenButtonView:(NSView *)view {
@@ -311,6 +334,13 @@ void ClientHandler::CloseMainWindow() {
     //  transforms from full screen back to normal
     if (customTitlebar) {
         [customTitlebar setHidden:NO];
+
+        NSWindow *popUpWindow = [notification object];
+
+        // Since we have nuked the title, we will have
+        // to set the string back as we are hiding the
+        // custom title bar.
+        [popUpWindow setTitle:@""];
     }
     if (trafficLightsView) {
         [trafficLightsView setHidden:NO];
@@ -340,6 +370,13 @@ void ClientHandler::CloseMainWindow() {
     }
     if (customTitlebar) {
         [customTitlebar setHidden:YES];
+
+        NSWindow *popUpWindow = [notification object];
+
+        // Since we have nuked the title, we will have
+        // to set the string back as we are hiding the
+        // custom title bar.
+        [popUpWindow setTitle:[customTitlebar titleString]];
     }
     if ([self needsFullScreenActivateHack]) {
         // HACK  to make sure that window is activate
@@ -508,7 +545,7 @@ bool ClientHandler::OnPreKeyEvent(CefRefPtr<CefBrowser> browser,
     
     
     // CEF 1750 -- We need to not handle keys for the DevTools Window.
-    if (browser->GetFocusedFrame()->GetURL() == "chrome-devtools://devtools/devtools.html") {
+    if (browser->GetFocusedFrame()->GetURL() == "chrome-devtools://devtools/inspector.html") {
         return false;
     }
     

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
+ * Copyright (c) 2013 - present Adobe Systems Incorporated. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -19,7 +19,12 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
+
 #include "cef_window.h"
+
+//DEFINES
+//HiDPI The default logical DPI when scaling is applied in windows. see. https://msdn.microsoft.com/en-us/library/ms701681(v=vs.85).aspx
+#define DEFAULT_WINDOWS_DPI 96  
 
 // Externals
 extern HINSTANCE hInst;   
@@ -346,4 +351,15 @@ BOOL cef_window::TrackNonClientMouseEvents(bool track/*=true*/)
     tme.cbSize = sizeof (tme) ;
 
     return ::TrackMouseEvent (&tme);
+}
+
+//Get the Horizontal DPI scaling factor. 
+UINT cef_window::GetDPIScalingX() const
+{
+    HDC dc = GetDC();
+    float lpx = dc ? GetDeviceCaps(dc,LOGPIXELSX):DEFAULT_WINDOWS_DPI ;
+    //scale factor as it would look in a default(96dpi) screen. the default will be always 96 logical DPI when scaling is applied in windows.
+    //see. https://msdn.microsoft.com/en-us/library/ms701681(v=vs.85).aspx 
+    ReleaseDC(dc);
+    return (lpx/DEFAULT_WINDOWS_DPI)*100; 
 }

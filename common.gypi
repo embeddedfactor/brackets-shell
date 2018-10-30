@@ -1781,6 +1781,7 @@
         ],
         'include_dirs': [
           '<(DEPTH)/third_party/wtl/include',
+          '<(DEPTH)/deps/icu/include',
         ],
         'conditions': [
           ['win_z7!=0', {
@@ -3591,13 +3592,14 @@
               'dbghelp.lib',
               'winmm.lib',
               'shlwapi.lib',
+              'advapi32.lib',
+              'iphlpapi.lib',
             ],
 
             'conditions': [
               ['MSVS_VERSION=="2005e"', {
                 # Non-express versions link automatically to these
                 'AdditionalDependencies': [
-                  'advapi32.lib',
                   'comdlg32.lib',
                   'ole32.lib',
                   'shell32.lib',

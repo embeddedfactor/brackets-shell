@@ -7,21 +7,22 @@
 #import <objc/runtime.h>
 #include <sstream>
 #include "cefclient.h"
+#include "update.h"
 #include "include/cef_app.h"
 #include "include/cef_version.h"
 #import "include/cef_application_mac.h"
 #include "include/cef_browser.h"
 #include "include/cef_frame.h"
-#include "include/cef_runnable.h"
 #include "client_handler.h"
-#include "resource_util.h"
-#include "string_util.h"
+#include "appshell/browser/resource_util.h"
 #include "config.h"
-#include "appshell_extensions.h"
 #include "command_callbacks.h"
-#include "client_switches.h"
+#include "appshell/common/client_switches.h"
+#include "appshell/appshell_helpers.h"
 #include "native_menu_model.h"
 #include "appshell_node_process.h"
+
+#include "AppKit/NSApplication.h"
 
 #include "TrafficLightsView.h"
 #include "TrafficLightsViewController.h"
@@ -31,6 +32,12 @@
 #include "FullScreenViewController.h"
 
 #import "CustomTitlebarView.h"
+
+// If app is built with 10.9 or lower
+// this constant is not defined.
+#ifndef NSAppKitVersionNumber10_10
+    #define NSAppKitVersionNumber10_10 1343
+#endif
 
 // Application startup time
 CFTimeInterval g_appStartupTime;
@@ -199,6 +206,10 @@ extern NSMutableArray* pendingOpenFiles;
     g_handler->SendJSCommand(g_handler->GetBrowser(), HELP_ABOUT);
 }
 
+-(IBAction)handleOpenPreferences:(id)sender {
+    g_handler->SendJSCommand(g_handler->GetBrowser(), OPEN_PREFERENCES_FILE);
+}
+
 - (IBAction)handleMenuAction:(id)sender {
     if (g_handler.get() && g_handler->GetBrowserId()) {
         NSMenuItem* senderItem = sender;
@@ -249,17 +260,23 @@ extern NSMutableArray* pendingOpenFiles;
 #endif
 }
 
--(BOOL)isRunningOnYosemite {
-    NSDictionary* dict = [NSDictionary dictionaryWithContentsOfFile:@"/System/Library/CoreServices/SystemVersion.plist"];
-    NSString* version =  [dict objectForKey:@"ProductVersion"];
-    return [version hasPrefix:@"10.10"];
+-(BOOL)isRunningOnYosemiteOrLater {
+    // This seems to be a more reliable way of checking
+    // the MACOS version. Documentation about this available
+    // at the following link.
+    // https://developer.apple.com/library/mac/documentation/DeveloperTools/Conceptual/cross_development/Using/using.html
+
+    if (NSAppKitVersionNumber >= NSAppKitVersionNumber10_10)
+        return true;
+    else
+        return false;
 }
 
 - (BOOL)isFullScreenSupported {
     // Return False on Yosemite so we
     //  don't draw our own full screen button
     //  and handle full screen mode
-    if (![self isRunningOnYosemite]) {
+    if (![self isRunningOnYosemiteOrLater]) {
         SInt32 version;
         Gestalt(gestaltSystemVersion, &version);
         return (version >= 0x1070);
@@ -268,7 +285,7 @@ extern NSMutableArray* pendingOpenFiles;
 }
 
 -(BOOL)needsFullScreenActivateHack {
-    if (![self isRunningOnYosemite]) {
+    if (![self isRunningOnYosemiteOrLater]) {
         SInt32 version;
         Gestalt(gestaltSystemVersion, &version);
         return (version >= 0x1090);
@@ -277,7 +294,7 @@ extern NSMutableArray* pendingOpenFiles;
 }
 
 -(BOOL)useSystemTrafficLights {
-    return [self isRunningOnYosemite];
+    return [self isRunningOnYosemiteOrLater];
 }
 
 -(void)windowDidResize:(NSNotification *)notification
@@ -316,8 +333,15 @@ extern NSMutableArray* pendingOpenFiles;
     }
     if (customTitlebar) {
         [customTitlebar setHidden:YES];
+        NSWindow *window = [notification object];
+
+        // Since we have nuked the title, we will have
+        // to set the string back as we are hiding the
+        // custom title bar.
+        [window setTitle:[customTitlebar titleString]];
     }
-    
+
+
     if ([self needsFullScreenActivateHack]) {
         [NSApp activateIgnoringOtherApps:YES];
         [NSApp unhide:nil];
@@ -406,6 +430,11 @@ extern NSMutableArray* pendingOpenFiles;
     //  transition from fullscreen back to normal
     if (customTitlebar) {
         [customTitlebar setHidden:NO];
+        
+        // Nuke the OS title as the title string is going to
+        // drawn by customTitleBar.
+        NSWindow *window = [notification object];
+        [window setTitle:@""];
     }
     if (trafficLightsView) {
         [trafficLightsView setHidden:NO];
@@ -584,7 +613,7 @@ extern NSMutableArray* pendingOpenFiles;
                           NSClosableWindowMask |
                           NSMiniaturizableWindowMask |
                           NSResizableWindowMask |
-                          NSTexturedBackgroundWindowMask );
+                          NSUnifiedTitleAndToolbarWindowMask );
 
   // Get the available screen space
   NSRect screen_rect = [[NSScreen mainScreen] visibleFrame];
@@ -633,7 +662,6 @@ extern NSMutableArray* pendingOpenFiles;
   content_rect = [mainWnd contentRectForFrameRect:[mainWnd frame]];
 
   // Configure the rest of the window
-  [mainWnd setTitle:WINDOW_TITLE];
   [mainWnd setDelegate:self.delegate];
   [mainWnd setCollectionBehavior: (1 << 7) /* NSWindowCollectionBehaviorFullScreenPrimary */];
 
@@ -655,7 +683,9 @@ extern NSMutableArray* pendingOpenFiles;
 
   settings.web_security = STATE_DISABLED;
 
-  CefRefPtr<CefCommandLine> cmdLine = AppGetCommandLine();
+  // Necessary to enable document.executeCommand("paste")
+  settings.javascript_access_clipboard = STATE_ENABLED;
+  settings.javascript_dom_paste = STATE_ENABLED;
 
 #ifdef DARK_INITIAL_PAGE
   // Avoid white flash at startup or refresh by making this the default
@@ -701,6 +731,9 @@ extern NSMutableArray* pendingOpenFiles;
   g_handler = NULL;
   CefShutdown();
 
+    //Run the app auto update
+  RunAppUpdate();
+    
   [self release];
 
   // Release the AutoRelease pool.
@@ -818,18 +851,19 @@ int main(int argc, char* argv[]) {
   [NSApp setDelegate:delegate];
 
   // Parse command line arguments.
-  AppInitCommandLine(argc, argv);
+  CefRefPtr<CefCommandLine> cmdLine = CefCommandLine::CreateCommandLine();
+  cmdLine->InitFromArgv(argc, argv);
 
   CefSettings settings;
 
  // Populate the settings based on command line arguments.
-  AppGetSettings(settings, app);
+  AppGetSettings(settings, cmdLine);
 
   settings.no_sandbox = YES;
     
   // Check command
   if (CefString(&settings.cache_path).length() == 0) {
-	  CefString(&settings.cache_path) = AppGetCachePath();
+	  CefString(&settings.cache_path) = appshell::AppGetCachePath();
   }
 
   // Initialize CEF.
@@ -839,10 +873,9 @@ int main(int argc, char* argv[]) {
   CGEventRef event = CGEventCreate(NULL);
   CGEventFlags modifiers = CGEventGetFlags(event);
   CFRelease(event);
-  
-  CefRefPtr<CefCommandLine> cmdLine = AppGetCommandLine();
-  if (cmdLine->HasSwitch(cefclient::kStartupPath)) {
-    CefString cmdLineStartupURL = cmdLine->GetSwitchValue(cefclient::kStartupPath);
+
+  if (cmdLine->HasSwitch(client::switches::kStartupPath)) {
+    CefString cmdLineStartupURL = cmdLine->GetSwitchValue(client::switches::kStartupPath);
     std::string startupURLStr(cmdLineStartupURL);
     NSString* str = [NSString stringWithUTF8String:startupURLStr.c_str()];
     startupUrl = [NSURL fileURLWithPath:[str stringByExpandingTildeInPath]];
@@ -907,31 +940,4 @@ int main(int argc, char* argv[]) {
 
 std::string AppGetWorkingDirectory() {
   return szWorkingDir;
-}
-
-CefString AppGetCachePath() {
-  std::string cachePath = std::string(ClientApp::AppGetSupportDirectory()) + "/cef_data";
-  
-  return CefString(cachePath);
-}
-
-CefString AppGetProductVersionString() {
-  NSMutableString *s = [NSMutableString stringWithString:APP_NAME];
-  [s replaceOccurrencesOfString:@" "
-                     withString:@""
-                        options:NSLiteralSearch
-                          range:NSMakeRange(0, [s length])];
-  [s appendString:@"/"];
-  [s appendString:(NSString*)[[NSBundle mainBundle]
-                              objectForInfoDictionaryKey:(NSString *)kCFBundleVersionKey]];
-  CefString result = CefString([s UTF8String]);
-  return result;
-}
-
-CefString AppGetChromiumVersionString() {
-  NSMutableString *s = [NSMutableString stringWithFormat:@"Chrome/%d.%d.%d.%d",
-                           cef_version_info(2), cef_version_info(3),
-                           cef_version_info(4), cef_version_info(5)];
-  CefString result = CefString([s UTF8String]);
-  return result;
 }

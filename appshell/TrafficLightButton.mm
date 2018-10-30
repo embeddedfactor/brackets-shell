@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Adobe Systems Incorporated. All rights reserved.
+ * Copyright (c) 2013 - present Adobe Systems Incorporated. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -20,6 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  *
  */
+
 #import "TrafficLightButton.h"
 
 //these are defined in MainMainu.xib file
@@ -27,21 +28,7 @@ static const int CLOSE_BUTTON_TAG = 1000;
 static const int MINIMIZE_BUTTON_TAG = 1001;
 static const int ZOOM_BUTTON_TAG = 1002;
 
-@implementation TrafficLightButton {
-    NSImage *inactive;
-    NSImage *active;
-    NSImage *hover;
-    NSImage *pressed;
-    NSImage *dirtyInactive;
-    NSImage *dirtyActive;
-    NSImage *dirtyHover;
-    NSImage *dirtyPressed;
-    BOOL activeState;
-    BOOL hoverState;
-    BOOL pressedState;
-    BOOL dirtyState;
-    BOOL closeButton;
-}
+@implementation TrafficLightButton
 
 -(id)initWithCoder:(NSCoder *)aDecoder {
     self = [super initWithCoder:aDecoder];
@@ -70,15 +57,15 @@ static const int ZOOM_BUTTON_TAG = 1002;
     } else if ([self tag] == ZOOM_BUTTON_TAG){
         buttonName = @"zoom";
     }
-    active = [NSImage imageNamed:[NSString stringWithFormat:@"window-%@-active",buttonName]];
-    inactive = [NSImage imageNamed:[NSString stringWithFormat:@"window-%@-inactive",buttonName]];
-    hover = [NSImage imageNamed:[NSString stringWithFormat:@"window-%@-hover",buttonName]];
-    pressed = [NSImage imageNamed:[NSString stringWithFormat:@"window-%@-pressed",buttonName]];
+    active = [[NSImage imageNamed:[NSString stringWithFormat:@"window-%@-active",buttonName]] retain];
+    inactive = [[NSImage imageNamed:[NSString stringWithFormat:@"window-%@-inactive",buttonName]] retain];
+    hover = [[NSImage imageNamed:[NSString stringWithFormat:@"window-%@-hover",buttonName]] retain];
+    pressed = [[NSImage imageNamed:[NSString stringWithFormat:@"window-%@-pressed",buttonName]] retain];
     if (closeButton) {
-        dirtyActive = [NSImage imageNamed:[NSString stringWithFormat:@"window-%@-dirty-active",buttonName]];
-        dirtyInactive = [NSImage imageNamed:[NSString stringWithFormat:@"window-%@-dirty-inactive",buttonName]];
-        dirtyHover = [NSImage imageNamed:[NSString stringWithFormat:@"window-%@-dirty-hover",buttonName]];
-        dirtyPressed = [NSImage imageNamed:[NSString stringWithFormat:@"window-%@-dirty-pressed",buttonName]];
+        dirtyActive = [[NSImage imageNamed:[NSString stringWithFormat:@"window-%@-dirty-active",buttonName]] retain];
+        dirtyInactive = [[NSImage imageNamed:[NSString stringWithFormat:@"window-%@-dirty-inactive",buttonName]] retain];
+        dirtyHover = [[NSImage imageNamed:[NSString stringWithFormat:@"window-%@-dirty-hover",buttonName]] retain];
+        dirtyPressed = [[NSImage imageNamed:[NSString stringWithFormat:@"window-%@-dirty-pressed",buttonName]] retain];
     }
 
     // assume active
@@ -162,29 +149,29 @@ static const int ZOOM_BUTTON_TAG = 1002;
     if (self == nil)
         return;
     if (pressedState) {
-        if (closeButton && dirtyState) {
+        if (closeButton && dirtyState && dirtyPressed) {
             [self setImage:dirtyPressed];
-        } else {
+        } else if (pressed) {
             [self setImage:pressed];
         }
     } else if (activeState) {
         if (hoverState) {
-            if (closeButton && dirtyState) {
+            if (closeButton && dirtyState && dirtyHover) {
                 [self setImage:dirtyHover];
-            } else {
+            } else if (hover) {
                 [self setImage:hover];
             }
         } else {
-            if (closeButton && dirtyState) {
+            if (closeButton && dirtyState && dirtyActive) {
                 [self setImage:dirtyActive];
-            } else {
+            } else if (active) {
                 [self setImage:active];
             }
         }
     } else {
-        if (closeButton && dirtyState) {
+        if (closeButton && dirtyState && dirtyInactive) {
             [self setImage:dirtyInactive];
-        } else {
+        } else if (inactive) {
             [self setImage:inactive];
         }
     }
@@ -194,9 +181,9 @@ static const int ZOOM_BUTTON_TAG = 1002;
 
     if ([[notification object] isEqual:[self superview]]) {
         hoverState = YES;
-        if (closeButton && dirtyState) {
+        if (closeButton && dirtyState && dirtyHover) {
             [self setImage:dirtyHover];
-        } else {
+        } else if (hover) {
             [self setImage:hover];
         }
     }
@@ -205,15 +192,15 @@ static const int ZOOM_BUTTON_TAG = 1002;
 - (void)hoverOut {
     hoverState = NO;
     if (activeState) {
-        if (closeButton && dirtyState) {
+        if (closeButton && dirtyState && dirtyActive) {
             [self setImage:dirtyActive];
-        } else {
+        } else if (active) {
             [self setImage:active];
         }
     } else {
-        if (closeButton && dirtyState) {
+        if (closeButton && dirtyState && dirtyInactive) {
             [self setImage:dirtyInactive];
-        } else {
+        } else if (inactive) {
             [self setImage:inactive];
         }
     }

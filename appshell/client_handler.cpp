@@ -9,12 +9,12 @@
 #include "include/cef_browser.h"
 #include "include/cef_frame.h"
 #include "include/wrapper/cef_stream_resource_handler.h"
+#include "include/wrapper/cef_helpers.h"
 #include "cefclient.h"
-#include "resource_util.h"
-#include "string_util.h"
+#include "appshell/browser/resource_util.h"
 #include "appshell/appshell_extensions.h"
 #include "appshell/command_callbacks.h"
-
+#include "config.h"
 
 // Custom menu command Ids.
 enum client_menu_ids {
@@ -109,14 +109,16 @@ static void ParseParams(const std::string& params, CefWindowInfo& windowInfo) {
 #endif
 
 bool ClientHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
-                             CefRefPtr<CefFrame> frame,
-                             const CefString& target_url,
-                             const CefString& target_frame_name,
-                             const CefPopupFeatures& popupFeatures,
-                             CefWindowInfo& windowInfo,
-                             CefRefPtr<CefClient>& client,
-                             CefBrowserSettings& settings,
-                             bool* no_javascript_access) {
+                           CefRefPtr<CefFrame> frame,
+                           const CefString& target_url,
+                           const CefString& target_frame_name,
+                           CefLifeSpanHandler::WindowOpenDisposition target_disposition,
+                           bool user_gesture,
+                           const CefPopupFeatures& popupFeatures,
+                           CefWindowInfo& windowInfo,
+                           CefRefPtr<CefClient>& client,
+                           CefBrowserSettings& settings,
+                           bool* no_javascript_access){
 #ifndef OS_LINUX
     std::string address = target_url.ToString();
     std::string url;
@@ -147,7 +149,7 @@ bool ClientHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
 }
 
 void ClientHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
-  REQUIRE_UI_THREAD();
+  CEF_REQUIRE_UI_THREAD();
 
   AutoLock lock_scope(this);
   if (!m_Browser.get())   {
@@ -163,7 +165,7 @@ void ClientHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 }
 
 void ClientHandler::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
-  REQUIRE_UI_THREAD();
+  CEF_REQUIRE_UI_THREAD();
 
   if (CanCloseBrowser(browser)) {
     if (m_BrowserId == browser->GetIdentifier()) {
@@ -186,10 +188,11 @@ void ClientHandler::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
 
 std::vector<CefString> gDroppedFiles;
 
+#ifndef OS_LINUX
 bool ClientHandler::OnDragEnter(CefRefPtr<CefBrowser> browser,
                                 CefRefPtr<CefDragData> dragData,
                                 DragOperationsMask mask) {
-    REQUIRE_UI_THREAD();
+    CEF_REQUIRE_UI_THREAD();
     
     if (dragData->IsFile()) {
         gDroppedFiles.clear();
@@ -198,10 +201,15 @@ bool ClientHandler::OnDragEnter(CefRefPtr<CefBrowser> browser,
     }
     return false;
 }
+#endif
 
 void ClientHandler::OnLoadStart(CefRefPtr<CefBrowser> browser,
-                                CefRefPtr<CefFrame> frame) {
-  REQUIRE_UI_THREAD();
+                                CefRefPtr<CefFrame> frame
+                                #ifdef OS_LINUX
+                                  ,TransitionType transition_type
+                                #endif
+                                ) {
+  CEF_REQUIRE_UI_THREAD();
 
   if (m_BrowserId == browser->GetIdentifier() && frame->IsMain()) {
     // We've just started loading a page
@@ -212,7 +220,7 @@ void ClientHandler::OnLoadStart(CefRefPtr<CefBrowser> browser,
 void ClientHandler::OnLoadEnd(CefRefPtr<CefBrowser> browser,
                               CefRefPtr<CefFrame> frame,
                               int httpStatusCode) {
-  REQUIRE_UI_THREAD();
+  CEF_REQUIRE_UI_THREAD();
 
   if (m_BrowserId == browser->GetIdentifier() && frame->IsMain()) {
     // We've just finished loading a page
@@ -225,7 +233,7 @@ void ClientHandler::OnLoadError(CefRefPtr<CefBrowser> browser,
                                 ErrorCode errorCode,
                                 const CefString& errorText,
                                 const CefString& failedUrl) {
-  REQUIRE_UI_THREAD();
+  CEF_REQUIRE_UI_THREAD();
 
   // Display a load error message.
   std::stringstream ss;
@@ -267,7 +275,7 @@ void ClientHandler::OnLoadingStateChange(CefRefPtr<CefBrowser> browser,
                                          bool isLoading,
                                          bool canGoBack,
                                          bool canGoForward) {
-  REQUIRE_UI_THREAD();
+  CEF_REQUIRE_UI_THREAD();
   SetLoading(isLoading);
   SetNavState(canGoBack, canGoForward);
 }
@@ -281,7 +289,7 @@ bool ClientHandler::OnConsoleMessage(CefRefPtr<CefBrowser> browser,
   // in xcode, or console window in dev tools)
   
 /*
-  REQUIRE_UI_THREAD();
+  CEF_REQUIRE_UI_THREAD();
 
   bool first_message;
   std::string logFile;
@@ -354,7 +362,7 @@ bool ClientHandler::OnContextMenuCommand(
     EventFlags event_flags) {
   switch (command_id) {
     case CLIENT_ID_SHOW_DEVTOOLS:
-      ShowDevTools(browser);
+      ShowDevTools(browser, CefPoint());
       return true;
     default:  // Allow default handling, if any.
       return false;
@@ -397,7 +405,8 @@ std::string ClientHandler::GetLastDownloadFile() {
   return m_LastDownloadFile;
 }
 
-void ClientHandler::ShowDevTools(CefRefPtr<CefBrowser> browser) {
+void ClientHandler::ShowDevTools(CefRefPtr<CefBrowser> browser,
+                    const CefPoint& inspect_element_at) {
     CefWindowInfo wi;
     CefBrowserSettings settings;
 
